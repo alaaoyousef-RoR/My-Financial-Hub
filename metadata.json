@@ -1,0 +1,6 @@
+{
+  "name": "مركز الإدارة المالية الشخصية | My Financial Hub",
+  "description": "نظام ذكي وشامل لإدارة ومتابعة المصاريف الشخصية، أقساط تمارا وتابي، التدفق المالي الشهري، وتسجيل المشتريات والديون المستحقة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

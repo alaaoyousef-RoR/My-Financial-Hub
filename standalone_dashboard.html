@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مركز الإدارة المالية الشخصية | My Financial Hub</title>
+  
+  <!-- Fonts: Cairo & Tajawal -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Cairo', 'Tajawal', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    *, ::before, ::after {
+      font-variant-numeric: tabular-nums;
+      -webkit-font-feature-settings: "lnum" 1, "tnum" 1;
+      font-feature-settings: "lnum" 1, "tnum" 1;
+    }
+    body {
+      font-family: 'Cairo', 'Tajawal', sans-serif;
+    }
+    .num-ltr {
+      direction: ltr;
+      display: inline-block;
+      unicode-bidi: embed;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs print:hidden">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-indigo-600 flex items-center justify-center text-white shadow-xs">
+          <i class="fa-solid fa-wallet text-lg"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-base sm:text-lg text-slate-900 leading-tight">مركز الإدارة المالية الشخصية</h1>
+          <p class="text-xs text-slate-500 font-medium">الأبواب المالية الستة · متابعة السيارة والأقساط والادخار</p>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button onclick="openModal('addExpenseModal')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-plus"></i>
+          <span>صرف جديد</span>
+        </button>
+        <button onclick="openModal('addSavingsModal')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-piggy-bank"></i>
+          <span class="hidden sm:inline">إيداع ادخار</span>
+        </button>
+        <button onclick="openModal('addInstallmentModal')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-credit-card"></i>
+          <span class="hidden sm:inline">قسط جديد</span>
+        </button>
+        <button onclick="exportData()" title="تصدير نسخة احتياطية" class="p-2 text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+          <i class="fa-solid fa-download"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-100 flex gap-4 overflow-x-auto text-xs sm:text-sm font-semibold custom-scroll">
+      <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn py-3 border-b-2 border-emerald-600 text-emerald-700 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-chart-pie"></i> لوحة التحكم والمعادلة
+      </button>
+      <button onclick="switchTab('income_fixed')" id="tab-income_fixed" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-car"></i> الدخل والسيارة والثوابت
+      </button>
+      <button onclick="switchTab('installments')" id="tab-installments" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-layer-group"></i> أقساط تمارا وتابي
+      </button>
+      <button onclick="switchTab('expenses')" id="tab-expenses" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-receipt"></i> المصروف الشخصي اليومي
+      </button>
+      <button onclick="switchTab('savings')" id="tab-savings" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-piggy-bank"></i> الادخار والأصول
+      </button>
+      <button onclick="switchTab('liabilities')" id="tab-liabilities" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-hand-holding-dollar"></i> الديون والمستحقات
+      </button>
+      <button onclick="switchTab('monthly')" id="tab-monthly" class="tab-btn py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-calendar-days"></i> التدفق الشهري (2026-2028)
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- TAB 1: DASHBOARD & PIPELINE -->
+    <section id="view-dashboard" class="space-y-6">
+      
+      <!-- Top 4 Accounting KPIs -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="kpiContainer">
+        <!-- Rendered via JS -->
+      </div>
+
+      <!-- Smart Cashflow Equation Visual Pipeline -->
+      <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4" id="pipelineBox">
+        <!-- Rendered via JS -->
+      </div>
+
+      <!-- Car Financing Banner -->
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-xs border border-indigo-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="w-8 h-8 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center"><i class="fa-solid fa-car"></i></span>
+            <h2 class="font-bold text-base text-white">متابعة تمويل السيارة: قسط 2,175 ر.س</h2>
+            <span class="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-400/30 num-ltr font-mono" id="carProgressBadge">38 / 60 قسطاً (63.3%)</span>
+          </div>
+          <p class="text-xs text-slate-300 mt-1">متبقي 22 شهراً حتى استحقاق الدفعة الأخيرة البالغة 37,000 ريال</p>
+        </div>
+
+        <div class="w-full md:w-64 space-y-1">
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>تم سداد: 38/60</span>
+            <span class="text-amber-400 font-mono num-ltr">22 شهراً متبقية</span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full" style="width: 63.3%;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: INCOME & FIXED OBLIGATIONS -->
+    <section id="view-income_fixed" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Income Box -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-slate-900 text-base">الباب الأول: الإيرادات والدخل</h3>
+            <button onclick="openModal('addIncomeModal')" class="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1.5 rounded-lg border border-emerald-200 font-semibold hover:bg-emerald-100">+ إضافة دخل</button>
+          </div>
+          <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 flex justify-between font-bold text-sm">
+            <span>إجمالي الدخل الشهري:</span>
+            <span class="text-emerald-700 font-mono num-ltr" id="incomeTotalBox">5,000.00 ر.س</span>
+          </div>
+          <div id="incomeList" class="space-y-2"></div>
+        </div>
+
+        <!-- Fixed Obligations Box -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-slate-900 text-base">الباب الثاني: الالتزامات الثابتة (سيارة + سكن + بنزين)</h3>
+            <button onclick="openModal('addFixedModal')" class="bg-blue-50 text-blue-700 text-xs px-2.5 py-1.5 rounded-lg border border-blue-200 font-semibold hover:bg-blue-100">+ إضافة التزام</button>
+          </div>
+          <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex justify-between font-bold text-sm">
+            <span>إجمالي الثوابت شهرياً:</span>
+            <span class="text-blue-700 font-mono num-ltr" id="fixedTotalBox">3,275.00 ر.س</span>
+          </div>
+          <div id="fixedList" class="space-y-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: INSTALLMENTS -->
+    <section id="view-installments" class="hidden space-y-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="font-bold text-slate-900 text-lg">الباب الثالث: أقساط تمارا وتابي (BNPL)</h2>
+          <p class="text-xs text-slate-500">حساب عدد الأشهر المتبقية وتاريخ الخلاص المالي</p>
+        </div>
+        <button onclick="openModal('addInstallmentModal')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-plus"></i> إضافة قسط جديد
+        </button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="installmentsGrid"></div>
+    </section>
+
+    <!-- TAB 4: EXPENSES -->
+    <section id="view-expenses" class="hidden space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 class="font-bold text-slate-900 text-lg">الباب الرابع: المصروف الشخصي اليومي (وين راح ووين أجا)</h2>
+          <p class="text-xs text-slate-500">سجل دقيق لكافة المصاريف المتغيرة اليومية</p>
+        </div>
+        <button onclick="openModal('addExpenseModal')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-plus"></i> تسجيل عملية صرف
+        </button>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <table class="w-full text-right text-xs sm:text-sm">
+          <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="p-3.5">الوصف</th>
+              <th class="p-3.5 text-center">التصنيف</th>
+              <th class="p-3.5 text-center">طريقة الدفع</th>
+              <th class="p-3.5 text-center">المبلغ</th>
+              <th class="p-3.5 text-center">التاريخ</th>
+            </tr>
+          </thead>
+          <tbody id="expensesTableBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 5: SAVINGS -->
+    <section id="view-savings" class="hidden space-y-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="font-bold text-slate-900 text-lg">الباب الخامس: الادخار وبناء الأصول (معزول عن المصروف اليومي)</h2>
+          <p class="text-xs text-slate-500">صندوق الطوارئ ومخصص الدفعة الأخيرة للسيارة (37,000 ريال)</p>
+        </div>
+        <button onclick="openModal('addSavingsModal')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-plus"></i> إيداع ادخار جديد
+        </button>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <table class="w-full text-right text-xs sm:text-sm">
+          <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="p-3.5">بند الادخار</th>
+              <th class="p-3.5 text-center">التصنيف</th>
+              <th class="p-3.5 text-center">المبلغ</th>
+              <th class="p-3.5 text-center">التاريخ</th>
+            </tr>
+          </thead>
+          <tbody id="savingsTableBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 6: LIABILITIES & RECEIVABLES -->
+    <section id="view-liabilities" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Liabilities (ديون عليك) -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
+          <h3 class="font-bold text-slate-900 text-base border-b border-slate-100 pb-3">الديون المؤجلة المستحقة عليك</h3>
+          <div class="p-3.5 rounded-xl border border-rose-100 bg-rose-50/40">
+            <div class="flex justify-between items-start font-bold">
+              <span>الدفعة الأخيرة للسيارة (Balloon Payment)</span>
+              <span class="text-rose-700 font-mono num-ltr">37,000.00 ر.س</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">مستحقة بعد استكمال الـ 22 شهراً المتبقية من القسط</p>
+          </div>
+        </div>
+
+        <!-- Receivables (ديون لك) -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
+          <h3 class="font-bold text-slate-900 text-base border-b border-slate-100 pb-3">أموالك المعلقة لدى الغير (المستحقات)</h3>
+          <div class="space-y-2">
+            <div class="p-3 rounded-xl border border-amber-200/80 bg-amber-50/30 flex justify-between items-center">
+              <div>
+                <span class="font-bold text-sm">whale</span>
+                <span class="text-xs text-slate-500 block">مستحق معلق</span>
+              </div>
+              <span class="font-bold font-mono text-amber-700 num-ltr">1,000.00 ر.س</span>
+            </div>
+            <div class="p-3 rounded-xl border border-amber-200/80 bg-amber-50/30 flex justify-between items-center">
+              <div>
+                <span class="font-bold text-sm">Abdullah</span>
+                <span class="text-xs text-slate-500 block">سلفة أو مستحق شخصي</span>
+              </div>
+              <span class="font-bold font-mono text-amber-700 num-ltr">2,000.00 ر.س</span>
+            </div>
+            <div class="p-3 rounded-xl border border-amber-200/80 bg-amber-50/30 flex justify-between items-center">
+              <div>
+                <span class="font-bold text-sm">3day</span>
+                <span class="text-xs text-slate-500 block">مستحق عمل</span>
+              </div>
+              <span class="font-bold font-mono text-amber-700 num-ltr">1,300.00 ر.س</span>
+            </div>
+          </div>
+          <div class="pt-2 text-xs text-slate-500 border-t border-slate-100">
+            إجمالي ديون السوق المعلقة: <strong class="num-ltr font-mono text-amber-700">4,300.00 ر.س</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 7: MONTHLY TABLE -->
+    <section id="view-monthly" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div class="p-4 border-b border-slate-100 font-bold text-slate-900 text-base">
+          جدول التدفق المالي الشهري الشامل (2026-2028)
+        </div>
+        <div class="overflow-x-auto custom-scroll">
+          <table class="w-full text-right text-xs sm:text-sm">
+            <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+              <tr>
+                <th class="p-3.5">الشهر</th>
+                <th class="p-3.5 text-center">الراتب</th>
+                <th class="p-3.5 text-center">السيارة</th>
+                <th class="p-3.5 text-center">السكن</th>
+                <th class="p-3.5 text-center">البنزين</th>
+                <th class="p-3.5 text-center text-rose-600">تمارا</th>
+                <th class="p-3.5 text-center text-emerald-600">تابي</th>
+                <th class="p-3.5 text-center font-bold">إجمالي الالتزام</th>
+                <th class="p-3.5 text-center bg-slate-100 font-bold">الصافي المتاح</th>
+              </tr>
+            </thead>
+            <tbody id="monthlyTableBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const data = {
+      incomes: [{ id: 'inc-1', title: 'الراتب الأساسي', amount: 5000 }],
+      car: { monthly: 2175, total: 60, paid: 38, balloon: 37000 },
+      fixed: [
+        { id: 'f-1', title: 'قسط السيارة', amount: 2175 },
+        { id: 'f-2', title: 'السكن', amount: 500 },
+        { id: 'f-3', title: 'بنزين', amount: 600 }
+      ],
+      installments: [
+        { id: 'i-1', name: 'Iphone (تمارا)', platform: 'Tamara', amount: 1163.00, start: 'Oct-26', end: 'Mar-27', remaining: 6 },
+        { id: 'i-2', name: 'Mokab (تمارا)', platform: 'Tamara', amount: 163.65, start: 'Oct-26', end: 'Jan-27', remaining: 4 },
+        { id: 'i-3', name: 'optionB (تمارا)', platform: 'Tamara', amount: 127.59, start: 'Oct-26', end: 'Dec-26', remaining: 3 },
+        { id: 'i-4', name: 'max (تمارا)', platform: 'Tamara', amount: 102.58, start: 'Oct-26', end: 'Dec-26', remaining: 3 },
+        { id: 'i-5', name: 'center (تمارا)', platform: 'Tamara', amount: 117.50, start: 'Oct-26', end: 'Dec-26', remaining: 3 },
+        { id: 'i-6', name: 'المطار (تمارا)', platform: 'Tamara', amount: 92.55, start: 'Oct-26', end: 'Oct-26', remaining: 1 },
+        { id: 'i-7', name: 'اوشن سبا (تمارا)', platform: 'Tamara', amount: 113.22, start: 'Oct-26', end: 'Nov-26', remaining: 2 },
+        { id: 'i-8', name: 'ناس تمارا', platform: 'Tamara', amount: 105.05, start: 'Oct-26', end: 'Nov-26', remaining: 2 },
+        { id: 'i-9', name: 'Mobily (تابي)', platform: 'Tabby', amount: 275.74, start: 'Oct-26', end: 'Mar-27', remaining: 6 },
+        { id: 'i-10', name: 'ناس (تابي)', platform: 'Tabby', amount: 422.74, start: 'Oct-26', end: 'Nov-26', remaining: 2 },
+        { id: 'i-11', name: 'تأمين (تابي)', platform: 'Tabby', amount: 142.06, start: 'Oct-26', end: 'Dec-26', remaining: 3 }
+      ],
+      expenses: [
+        { desc: 'بنزين سيارة الأسبوع الأول', category: 'بنزين وسيارة', method: 'مدى', amount: 150, date: '2026-10-02' },
+        { desc: 'عشاء مطعم', category: 'طعام ومقاهي', method: 'مدى', amount: 85, date: '2026-10-03' },
+        { desc: 'مشتريات سوبرماركت', category: 'سكن ومستلزمات', method: 'مدى', amount: 142.50, date: '2026-10-03' },
+        { desc: 'قهوة مختصة', category: 'طعام ومقاهي', method: 'Apple Pay', amount: 22, date: '2026-10-04' }
+      ],
+      savings: [
+        { title: 'مخصص الدفعة الأخيرة للسيارة', category: 'مخصص سيارة', amount: 500, date: '2026-10-01' },
+        { title: 'صندوق طوارئ', category: 'طوارئ', amount: 300, date: '2026-10-01' }
+      ],
+      monthly: [
+        { month: 'Oct-26', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 2549.94, tabby: 275.74 },
+        { month: 'Nov-26', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 1294.39, tabby: 275.74 },
+        { month: 'Dec-26', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 1816.38, tabby: 275.74 },
+        { month: 'Jan-27', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 1326.65, tabby: 275.74 },
+        { month: 'Feb-27', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 1163.00, tabby: 275.74 },
+        { month: 'Mar-27', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 1163.00, tabby: 275.74 },
+        { month: 'Apr-27', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 0, tabby: 0 },
+        { month: 'May-27', salary: 5000, car: 2175, home: 500, gas: 600, tamara: 0, tabby: 0 }
+      ]
+    };
+
+    function numFmt(v) {
+      return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+    }
+
+    function switchTab(id) {
+      document.querySelectorAll('section[id^="view-"]').forEach(s => s.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('border-emerald-600', 'text-emerald-700');
+        b.classList.add('border-transparent', 'text-slate-500');
+      });
+      document.getElementById('view-' + id).classList.remove('hidden');
+      const active = document.getElementById('tab-' + id);
+      if (active) {
+        active.classList.remove('border-transparent', 'text-slate-500');
+        active.classList.add('border-emerald-600', 'text-emerald-700');
+      }
+    }
+
+    function renderUI() {
+      const income = data.incomes.reduce((a, b) => a + b.amount, 0);
+      const fixed = data.fixed.reduce((a, b) => a + b.amount, 0);
+      const bnpl = data.installments.reduce((a, b) => a + b.amount, 0);
+      const net = income - fixed - bnpl;
+      const expenses = data.expenses.reduce((a, b) => a + b.amount, 0);
+      const savings = data.savings.reduce((a, b) => a + b.amount, 0);
+      const ending = net - expenses - savings;
+
+      // KPIs
+      document.getElementById('kpiContainer').innerHTML = \`
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <span class="text-xs text-slate-500 font-semibold block">1. إجمالي الدخل المعتمد</span>
+          <p class="text-2xl font-bold font-mono text-emerald-700 num-ltr mt-1">\${numFmt(income)} <span class="text-xs text-slate-400">ر.س</span></p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <span class="text-xs text-slate-500 font-semibold block">2. الالتزامات الثابتة (سيارة/سكن/بنزين)</span>
+          <p class="text-2xl font-bold font-mono text-blue-700 num-ltr mt-1">\${numFmt(fixed)} <span class="text-xs text-slate-400">ر.س</span></p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <span class="text-xs text-slate-500 font-semibold block">3. أقساط تمارا وتابي</span>
+          <p class="text-2xl font-bold font-mono text-rose-600 num-ltr mt-1">\${numFmt(bnpl)} <span class="text-xs text-slate-400">ر.س</span></p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-indigo-200/90 shadow-xs">
+          <span class="text-xs text-indigo-950 font-bold block">4. الصافي المتاح للمصروف</span>
+          <p class="text-2xl font-bold font-mono text-indigo-700 num-ltr mt-1">\${numFmt(net)} <span class="text-xs text-slate-400">ر.س</span></p>
+        </div>
+      \`;
+
+      // Pipeline
+      document.getElementById('pipelineBox').innerHTML = \`
+        <h3 class="font-bold text-slate-900 text-sm mb-3">معادلة التدفق المحاسبي: الصافي المتاح = الدخل - الثوابت - الأقساط</h3>
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-center">
+          <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+            <span class="text-xs text-emerald-900 block font-semibold">1. الدخل</span>
+            <p class="text-lg font-bold font-mono text-emerald-700 num-ltr mt-1">\${numFmt(income)}</p>
+          </div>
+          <div class="bg-blue-50 p-3 rounded-xl border border-blue-200">
+            <span class="text-xs text-blue-900 block font-semibold">2. الثوابت (-)</span>
+            <p class="text-lg font-bold font-mono text-blue-700 num-ltr mt-1">\${numFmt(fixed)}</p>
+          </div>
+          <div class="bg-rose-50 p-3 rounded-xl border border-rose-200">
+            <span class="text-xs text-rose-900 block font-semibold">3. تمارا وتابي (-)</span>
+            <p class="text-lg font-bold font-mono text-rose-700 num-ltr mt-1">\${numFmt(bnpl)}</p>
+          </div>
+          <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-200">
+            <span class="text-xs text-indigo-900 block font-semibold">4. الصافي المتاح</span>
+            <p class="text-lg font-bold font-mono text-indigo-700 num-ltr mt-1">\${numFmt(net)}</p>
+          </div>
+          <div class="bg-slate-900 text-white p-3 rounded-xl border border-slate-800">
+            <span class="text-xs text-slate-300 block font-semibold">5. الفائض الفعلي</span>
+            <p class="text-lg font-bold font-mono text-white num-ltr mt-1">\${numFmt(ending)}</p>
+          </div>
+        </div>
+      \`;
+
+      // Monthly Table
+      const mb = document.getElementById('monthlyTableBody');
+      mb.innerHTML = '';
+      data.monthly.forEach(r => {
+        const tot = r.car + r.home + r.gas + r.tamara + r.tabby;
+        const n = r.salary - tot;
+        const tr = document.createElement('tr');
+        tr.className = r.tamara === 0 && r.tabby === 0 ? 'bg-emerald-50/50' : 'hover:bg-slate-50';
+        tr.innerHTML = \`
+          <td class="p-3.5 font-bold">\${r.month}</td>
+          <td class="p-3.5 text-center font-mono num-ltr">\${numFmt(r.salary)}</td>
+          <td class="p-3.5 text-center font-mono num-ltr text-slate-600">\${numFmt(r.car)}</td>
+          <td class="p-3.5 text-center font-mono num-ltr text-slate-600">\${numFmt(r.home)}</td>
+          <td class="p-3.5 text-center font-mono num-ltr text-slate-600">\${numFmt(r.gas)}</td>
+          <td class="p-3.5 text-center font-mono num-ltr text-rose-600">\${r.tamara > 0 ? numFmt(r.tamara) : '0.00'}</td>
+          <td class="p-3.5 text-center font-mono num-ltr text-emerald-600">\${r.tabby > 0 ? numFmt(r.tabby) : '0.00'}</td>
+          <td class="p-3.5 text-center font-bold font-mono num-ltr text-rose-700">\${numFmt(tot)}</td>
+          <td class="p-3.5 text-center font-bold font-mono num-ltr \${n < 0 ? 'text-rose-600' : 'text-emerald-700'}">\${n > 0 ? '+' : ''}\${numFmt(n)}</td>
+        \`;
+        mb.appendChild(tr);
+      });
+
+      // Installments
+      const ig = document.getElementById('installmentsGrid');
+      ig.innerHTML = '';
+      data.installments.forEach(item => {
+        const isTamara = item.platform === 'Tamara';
+        const card = document.createElement('div');
+        card.className = "bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col justify-between";
+        card.innerHTML = \`
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-xs font-bold px-2 py-0.5 rounded \${isTamara ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">\${item.platform}</span>
+              <span class="text-xs text-slate-400 font-mono num-ltr">\${item.remaining} أشهر متبقية</span>
+            </div>
+            <h3 class="font-bold text-slate-900 text-base">\${item.name}</h3>
+            <p class="text-xs text-slate-500 mt-1">من \${item.start} إلى \${item.end}</p>
+          </div>
+          <div class="pt-3 border-t border-slate-100 flex justify-between items-end mt-3">
+            <span class="text-xs text-slate-400">القسط الشهري</span>
+            <span class="text-base font-bold font-mono text-slate-900 num-ltr">\${numFmt(item.amount)} ر.س</span>
+          </div>
+        \`;
+        ig.appendChild(card);
+      });
+
+      // Expenses
+      const eb = document.getElementById('expensesTableBody');
+      eb.innerHTML = '';
+      data.expenses.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td class="p-3.5 font-medium">\${item.desc}</td>
+          <td class="p-3.5 text-center text-xs text-slate-600">\${item.category}</td>
+          <td class="p-3.5 text-center text-xs text-slate-500">\${item.method}</td>
+          <td class="p-3.5 text-center font-bold font-mono text-rose-600 num-ltr">\${numFmt(item.amount)} ر.س</td>
+          <td class="p-3.5 text-center text-xs text-slate-500 font-mono num-ltr">\${item.date}</td>
+        \`;
+        eb.appendChild(tr);
+      });
+
+      // Savings
+      const sb = document.getElementById('savingsTableBody');
+      sb.innerHTML = '';
+      data.savings.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td class="p-3.5 font-bold text-slate-900">\${item.title}</td>
+          <td class="p-3.5 text-center text-xs text-slate-600">\${item.category}</td>
+          <td class="p-3.5 text-center font-bold font-mono text-emerald-700 num-ltr">+\${numFmt(item.amount)} ر.س</td>
+          <td class="p-3.5 text-center text-xs text-slate-500 font-mono num-ltr">\${item.date}</td>
+        \`;
+        sb.appendChild(tr);
+      });
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'financial_hub_backup.json';
+      a.click();
+    }
+
+    window.onload = renderUI;
+  </script>
+</body>
+</html>

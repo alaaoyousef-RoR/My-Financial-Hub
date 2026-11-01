@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "FinancialDashboard": {
+      "title": "Financial Dashboard Data",
+      "description": "User personal financial state including accounts, incomes, obligations, installments, expenses, and savings.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the owner user." },
+        "incomes": { "type": "array", "description": "List of user incomes." },
+        "carPlan": { "type": "object", "description": "Car loan and financing details." },
+        "fixedObligations": { "type": "array", "description": "List of fixed monthly obligations." },
+        "installments": { "type": "array", "description": "List of BNPL and other installment plans." },
+        "expenses": { "type": "array", "description": "List of logged personal expenses." },
+        "savings": { "type": "array", "description": "List of savings deposits and targets." },
+        "liabilities": { "type": "array", "description": "List of liabilities and long-term debts." },
+        "receivables": { "type": "array", "description": "List of money owed to the user." },
+        "monthlyData": { "type": "array", "description": "15-month forecast data." },
+        "accountBalances": { "type": "object", "description": "Checking and savings balances." },
+        "transactions": { "type": "array", "description": "Audit log of financial transactions." },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last synchronization." }
+      },
+      "required": ["userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/data/financial_dashboard": {
+      "schema": "FinancialDashboard",
+      "description": "User specific dashboard document containing all financial state."
+    }
+  }
+}

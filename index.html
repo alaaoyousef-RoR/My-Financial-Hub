@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>مركز الإدارة المالية الشخصية | My Financial Hub</title>
+    <meta name="description" content="نظام ذكي وشامل لإدارة ومتابعة المصاريف الشخصية، أقساط تمارا وتابي، التدفق المالي الشهري، وتسجيل المشتريات والديون المستحقة." />
+    <meta property="og:title" content="مركز الإدارة المالية الشخصية | My Financial Hub" />
+    <meta property="og:description" content="نظام ذكي وشامل لإدارة ومتابعة المصاريف الشخصية، أقساط تمارا وتابي، التدفق المالي الشهري، وتسجيل المشتريات والديون المستحقة." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Fonts: Readex Pro -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet" />
+    <script>
+      // Global Chart.js default font configuration if Chart.js is loaded
+      if (typeof window !== 'undefined') {
+        window.__configureChartFont = function() {
+          if (window.Chart && window.Chart.defaults) {
+            window.Chart.defaults.font = window.Chart.defaults.font || {};
+            window.Chart.defaults.font.family = "'Readex Pro', sans-serif";
+          }
+        };
+        window.__configureChartFont();
+      }
+    </script>
+  </head>
+  <body class="bg-[#09090b] text-[#ffffff] antialiased min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
