@@ -220,7 +220,7 @@ function DashboardAppContent() {
               checkingBalance={monthContext.isReadOnlySimulation ? monthContext.activeMonthCheckingBalance : accountBalances.checkingBalance}
               savingsBalance={monthContext.isReadOnlySimulation ? monthContext.activeMonthSavingsBalance : accountBalances.savingsBalance}
               unpaidCommitments={unpaidCommitments}
-              emergencyTarget={accountBalances.emergencyTarget || 30000}
+              emergencyTarget={accountBalances.emergencyTarget || 0}
               onUpdateBalances={updateAccountBalances}
               onOpenSavingsModal={() => setIsSavingsModalOpen(true)}
               isReadOnlySimulation={monthContext.isReadOnlySimulation}

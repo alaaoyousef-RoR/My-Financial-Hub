@@ -101,20 +101,11 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       ? totalDaysInMonth 
       : 1;
 
-  // Monthly allowance budget configuration (persisted in localStorage per month)
-  const [monthlyBudget, setMonthlyBudget] = useState<number>(() => {
-    const saved = localStorage.getItem(`monthly_spending_allowance_${selectedYearMonth}`);
-    if (saved) {
-      const parsed = parseFloat(saved);
-      if (!isNaN(parsed) && parsed >= 0) return parsed;
-    }
-    const legacy = localStorage.getItem('monthly_spending_allowance');
-    if (legacy && isSelectedCurrent) {
-      const parsed = parseFloat(legacy);
-      if (!isNaN(parsed) && parsed >= 0) return parsed;
-    }
-    return Math.max(Math.round(discretionaryNet || 0), 0);
-  });
+  // Monthly allowance target derived directly from FinancialContext
+  const [customBudgetOverride, setCustomBudgetOverride] = useState<number | null>(null);
+  const monthlyBudget = customBudgetOverride !== null 
+    ? customBudgetOverride 
+    : Math.max(Math.round(discretionaryNet || 0), 0);
 
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [tempBudgetInput, setTempBudgetInput] = useState(String(monthlyBudget));
@@ -134,8 +125,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const handleSaveBudget = () => {
     const val = parseFloat(tempBudgetInput);
     if (!isNaN(val) && val >= 0) {
-      setMonthlyBudget(val);
-      localStorage.setItem(`monthly_spending_allowance_${selectedYearMonth}`, String(val));
+      setCustomBudgetOverride(val);
       setIsEditingBudget(false);
     }
   };
@@ -192,53 +182,36 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     return isNaN(parsed) ? currentDay : parsed;
   };
 
-  // [ACTUAL_CURRENT_BALANCE]: Real cash/wallet balance user has right now for allowances (Single source of truth)
-  const [actualCurrentBalance, setActualCurrentBalance] = useState<number>(() => {
-    const saved = localStorage.getItem(`actual_allowance_balance_${selectedYearMonth}`);
-    if (saved !== null) {
-      const parsed = parseFloat(saved);
-      if (!isNaN(parsed) && parsed >= 0) return parsed;
-    }
-    const legacy = localStorage.getItem('actual_allowance_balance');
-    if (legacy !== null && isSelectedCurrent) {
-      const parsed = parseFloat(legacy);
-      if (!isNaN(parsed) && parsed >= 0) return parsed;
-    }
-    // Default baseline: monthlyBudget + totalTopUps - accumulatedExpenses
-    const initExp = activeMonthExpenses
+  // Derived genuine accumulated expenses for this month
+  const accumulatedExpenses = useMemo(() => {
+    return activeMonthExpenses
       .filter((e) => e.amount > 0 && e.category !== 'تغذية مخصص' && e.type !== 'TOP_UP')
-      .reduce((sum, e) => sum + e.amount, 0);
-    const initTop = activeMonthExpenses
-      .filter((e) => e.type === 'TOP_UP' || e.category === 'تغذية مخصص' || e.amount < 0)
-      .reduce((sum, e) => sum + Math.abs(e.amount), 0);
-    return Math.max(monthlyBudget + initTop - initExp, 0);
-  });
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  }, [activeMonthExpenses]);
 
-  // Re-sync balance when selected month switches
-  useEffect(() => {
-    const saved = localStorage.getItem(`actual_allowance_balance_${selectedYearMonth}`);
-    if (saved !== null) {
-      const parsed = parseFloat(saved);
-      if (!isNaN(parsed) && parsed >= 0) {
-        setActualCurrentBalance(parsed);
-        setTempActualBalanceInput(String(parsed));
-        return;
-      }
-    }
-    const initExp = activeMonthExpenses
-      .filter((e) => e.amount > 0 && e.category !== 'تغذية مخصص' && e.type !== 'TOP_UP')
-      .reduce((sum, e) => sum + e.amount, 0);
-    const initTop = activeMonthExpenses
+  // Derived top-ups for this month
+  const totalTopUps = useMemo(() => {
+    return activeMonthExpenses
       .filter((e) => e.type === 'TOP_UP' || e.category === 'تغذية مخصص' || e.amount < 0)
-      .reduce((sum, e) => sum + Math.abs(e.amount), 0);
-    const computed = Math.max(monthlyBudget + initTop - initExp, 0);
-    setActualCurrentBalance(computed);
-    setTempActualBalanceInput(String(computed));
-  }, [selectedYearMonth, monthlyBudget, activeMonthExpenses]);
+      .reduce((sum, e) => sum + Math.abs(Number(e.amount) || 0), 0);
+  }, [activeMonthExpenses]);
+
+  // Derived real current allowance balance (Single source of truth from FinancialContext)
+  const actualCurrentBalance = Math.max(
+    Math.round((monthlyBudget + totalTopUps - accumulatedExpenses) * 100) / 100,
+    0
+  );
 
   // Dedicated permanent balance editing inline state
   const [isEditingActualBalance, setIsEditingActualBalance] = useState(false);
   const [tempActualBalanceInput, setTempActualBalanceInput] = useState<string>(String(actualCurrentBalance));
+
+  // Sync temp input when actual balance reactively updates
+  useEffect(() => {
+    if (!isEditingActualBalance) {
+      setTempActualBalanceInput(String(actualCurrentBalance));
+    }
+  }, [actualCurrentBalance, isEditingActualBalance]);
 
   // Calendar parameters for rebalancing
   const remainingDaysInMonth = Math.max(totalDaysInMonth - currentDay + 1, 1);
@@ -260,8 +233,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     summaries: bucketSummaries,
     activeWeekRemaining: currentWeekRemaining,
     dailySafeLimit,
-    accumulatedExpenses,
-    totalTopUps,
     calculatedTheoreticalBalance,
     activeSummary
   } = allocationsOutput;
@@ -273,36 +244,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     return bucketSummaries.find(s => s.bucket.id === selectedWeekId) || activeSummary;
   }, [bucketSummaries, selectedWeekId, activeSummary]);
 
-  // Helper to persist actual balance
-  const updateActualBalance = (newVal: number) => {
-    const clamped = Math.max(Math.round(newVal * 100) / 100, 0);
-    setActualCurrentBalance(clamped);
-    setTempActualBalanceInput(String(clamped));
-    localStorage.setItem(`actual_allowance_balance_${selectedYearMonth}`, String(clamped));
-    if (isSelectedCurrent) {
-      localStorage.setItem('actual_allowance_balance', String(clamped));
-    }
-  };
-
-  const handleSaveActualBalance = () => {
-    const targetVal = parseFloat(tempActualBalanceInput);
-    if (!isNaN(targetVal) && targetVal >= 0) {
-      updateActualBalance(targetVal);
-      setIsEditingActualBalance(false);
-      triggerCelebration();
-      showToast?.(`تم تثبيت الرصيد الفعلي المتوفر: ${formatCurrency(targetVal)} ر.س بنجاح! 🎯`);
-    }
-  };
-
-  // Sync actual balance with calculated theoretical balance
-  const handleSyncWithCalculated = () => {
-    updateActualBalance(calculatedTheoreticalBalance);
-    setIsEditingActualBalance(false);
-    triggerCelebration();
-    showToast?.(`تمت مزامنة الرصيد الفعلي مع السجل المحسوب (${formatCurrency(calculatedTheoreticalBalance)} ر.س) بنجاح! ⚡`);
-  };
-
-  // Quick Top-up handler
+  // Quick Top-up handler - updates FinancialContext directly
   const handleQuickTopUp = (amount: number, note?: string) => {
     if (isNaN(amount) || amount <= 0) return;
 
@@ -320,7 +262,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     };
 
     setExpenses((prev: ExpenseRecord[]) => [topUpRecord, ...prev]);
-    updateActualBalance(actualCurrentBalance + amount);
     triggerCelebration();
     showToast?.(`تم إيداع +${formatCurrency(amount)} ر.س تغذية للمصروف بنجاح! 💰`);
   };
@@ -338,10 +279,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   /**
    * Reconciles the allowance balance against actual cash/wallet balance.
-   * Calculates difference = newActualAmount - calculatedTheoreticalBalance.
+   * Calculates difference = newActualAmount - actualCurrentBalance.
    * If difference < 0: logs an unrecorded expense without corrupting metrics.
    * If difference > 0: logs a top-up deposit without corrupting accumulated expenses.
-   * Updates actualCurrentBalance as the single source of truth.
+   * Updates state atomically via FinancialContext.
    */
   const handleReconcileBalance = (newActualAmount: number) => {
     if (isNaN(newActualAmount) || newActualAmount < 0) {
@@ -349,7 +290,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       return;
     }
 
-    const difference = newActualAmount - calculatedTheoreticalBalance;
+    const difference = Math.round((newActualAmount - actualCurrentBalance) * 100) / 100;
 
     if (Math.abs(difference) < 0.01) {
       showToast?.('الرصيد الفعلي مطابق تماماً للرصيد المحسوب الحالي 👍');
@@ -371,7 +312,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       const deficitRecord: ExpenseRecord = {
         id: `exp-deficit-${Date.now()}`,
         desc: reconcileNote.trim() || `تسوية رصيد (عجز مصروفات غير مسجلة -${formatCurrency(deficitAmount)} ر.س)`,
-        amount: deficitAmount, // Genuine positive expense
+        amount: deficitAmount,
         category: 'أخرى',
         method: 'كاش',
         type: 'EXPENSE',
@@ -384,7 +325,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       const surplusRecord: ExpenseRecord = {
         id: `topup-surplus-${Date.now()}`,
         desc: reconcileNote.trim() || `تسوية رصيد (فائض / تغذية مخصص +${formatCurrency(difference)} ر.س)`,
-        amount: difference, // Positive amount marked as TOP_UP
+        amount: difference,
         category: 'تغذية مخصص',
         method: 'كاش',
         type: 'TOP_UP',
@@ -394,13 +335,27 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       showToast?.(`تم تسجيل تسوية فائض بمبلغ +${formatCurrency(difference)} ر.س ومطابقة الرصيد الفعلي! 💰`);
     }
 
-    updateActualBalance(newActualAmount);
     triggerCelebration();
     setIsReconcileOpen(false);
   };
 
+  const handleSaveActualBalance = () => {
+    const targetVal = parseFloat(tempActualBalanceInput);
+    if (!isNaN(targetVal) && targetVal >= 0) {
+      handleReconcileBalance(targetVal);
+      setIsEditingActualBalance(false);
+    }
+  };
+
+  // Sync actual balance with calculated theoretical balance
+  const handleSyncWithCalculated = () => {
+    setIsEditingActualBalance(false);
+    triggerCelebration();
+    showToast?.(`الرصيد الفعلي متزامن تلقائياً (${formatCurrency(actualCurrentBalance)} ر.س) مع سجل العمليات ⚡`);
+  };
+
   const enteredActualNumber = parseFloat(actualBalanceInput);
-  const liveDifference = !isNaN(enteredActualNumber) ? enteredActualNumber - calculatedTheoreticalBalance : 0;
+  const liveDifference = !isNaN(enteredActualNumber) ? enteredActualNumber - actualCurrentBalance : 0;
 
   // Handle Quick Macro Submission
   const handleMacroSubmit = (e: React.FormEvent) => {
@@ -419,7 +374,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
     const description = macroDesc.trim() || `صرف ${macroCategory}`;
     onQuickAdd(description, amount, macroCategory, 'مدى / بطاقة بنكية', targetDate);
-    updateActualBalance(Math.max(actualCurrentBalance - amount, 0));
     triggerCelebration();
 
     setMacroAmount('');
@@ -432,20 +386,11 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     const targetDate = `${selectedYearMonth}-${formattedDay}`;
 
     onQuickAdd(desc, amount, cat, 'مدى / بطاقة بنكية', targetDate);
-    updateActualBalance(Math.max(actualCurrentBalance - amount, 0));
     triggerCelebration();
   };
 
   // Safe wrapper for deleting expense
   const handleDeleteExpenseWrapper = (id: string) => {
-    const target = expenses.find(e => e.id === id);
-    if (target) {
-      if (target.type === 'TOP_UP' || target.category === 'تغذية مخصص' || target.amount < 0) {
-        updateActualBalance(Math.max(actualCurrentBalance - Math.abs(target.amount), 0));
-      } else {
-        updateActualBalance(actualCurrentBalance + target.amount);
-      }
-    }
     onDeleteExpense(id);
   };
 

@@ -1,13 +1,22 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
+// Initialize Firebase App
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Initialize Firestore explicitly with designated database instance
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
+
+// Initialize Firebase Authentication
 export const auth = getAuth(app);
 
-// Connection test on boot as required by Firebase skill
+// Configure Google Auth Provider
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+// Validation connection test on boot
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));

@@ -35,7 +35,7 @@ import { formatCurrency, triggerCelebration } from '../utils/formatters';
 
 /**
  * Recursively sanitizes state objects before persisting to Cloud Firestore
- * by stripping keys with `undefined` values or converting them safely.
+ * by converting any `undefined` values to `null` to comply with Firestore constraints.
  */
 export function sanitizeForFirestore<T>(obj: T): T {
   if (obj === undefined) return null as unknown as T;
@@ -46,9 +46,7 @@ export function sanitizeForFirestore<T>(obj: T): T {
   }
   const result: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      result[key] = sanitizeForFirestore(value);
-    }
+    result[key] = value === undefined ? null : sanitizeForFirestore(value);
   }
   return result as T;
 }
@@ -233,57 +231,66 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     const unsubscribe = onSnapshot(
       docRef,
       async (snapshot) => {
+        // Ignore local write echoes to prevent race-condition loops
+        if (snapshot.metadata.hasPendingWrites) {
+          return;
+        }
+
+        // Lock outbound sync while applying incoming remote snapshot
         isRemoteSyncRef.current = true;
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          if (Array.isArray(data.incomes) && data.incomes.length > 0) setIncomes(data.incomes);
-          if (data.carPlan) setCarPlan(data.carPlan);
-          if (Array.isArray(data.fixedObligations) && data.fixedObligations.length > 0) setFixedObligations(data.fixedObligations);
-          if (Array.isArray(data.installments) && data.installments.length > 0) setInstallments(data.installments);
-          if (Array.isArray(data.expenses) && data.expenses.length > 0) setExpenses(data.expenses);
-          if (Array.isArray(data.savings) && data.savings.length > 0) setSavings(data.savings);
-          if (Array.isArray(data.liabilities) && data.liabilities.length > 0) setLiabilities(data.liabilities);
-          if (Array.isArray(data.receivables) && data.receivables.length > 0) setReceivables(data.receivables);
-          if (Array.isArray(data.monthlyData) && data.monthlyData.length > 0) setMonthlyData(data.monthlyData);
-          if (data.accountBalances && (data.accountBalances.checkingBalance > 0 || data.accountBalances.savingsBalance > 0)) {
-            setAccountBalances(data.accountBalances);
-          }
-          if (Array.isArray(data.transactions) && data.transactions.length > 0) setTransactions(data.transactions);
-          setSaveStatus('saved');
-          console.log('[Persistence] Synced remote document from Cloud Firestore ✓');
-        } else {
-          // Initialize remote Firestore document using current local state (or clean defaults)
-          const currentLocalDoc = {
-            userId: user.uid,
-            incomes,
-            carPlan,
-            fixedObligations,
-            installments,
-            expenses,
-            savings,
-            liabilities,
-            receivables,
-            monthlyData,
-            accountBalances,
-            transactions,
-            updatedAt: new Date().toISOString()
-          };
-          try {
+        try {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            if (Array.isArray(data.incomes)) setIncomes(data.incomes);
+            if (data.carPlan) setCarPlan(data.carPlan);
+            if (Array.isArray(data.fixedObligations)) setFixedObligations(data.fixedObligations);
+            if (Array.isArray(data.installments)) setInstallments(data.installments);
+            if (Array.isArray(data.expenses)) setExpenses(data.expenses);
+            if (Array.isArray(data.savings)) setSavings(data.savings);
+            if (Array.isArray(data.liabilities)) setLiabilities(data.liabilities);
+            if (Array.isArray(data.receivables)) setReceivables(data.receivables);
+            if (Array.isArray(data.monthlyData)) setMonthlyData(data.monthlyData);
+            if (data.accountBalances) setAccountBalances(data.accountBalances);
+            if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+            setSaveStatus('saved');
+            console.log('[Persistence] Synced remote document from Cloud Firestore ✓');
+          } else {
+            // First time provisioning for new user: initialize remote document
+            const currentLocalDoc = {
+              userId: user.uid,
+              incomes,
+              carPlan,
+              fixedObligations,
+              installments,
+              expenses,
+              savings,
+              liabilities,
+              receivables,
+              monthlyData,
+              accountBalances,
+              transactions,
+              updatedAt: new Date().toISOString()
+            };
             await setDoc(docRef, sanitizeForFirestore(currentLocalDoc));
             setSaveStatus('saved');
-            console.log('[Persistence] Created remote Firestore document with current local state');
-          } catch (err) {
-            setSaveStatus('error');
-            handleFirestoreError(err, OperationType.WRITE, docPath);
+            console.log('[Persistence] Initialized new remote Firestore document');
           }
+        } catch (err) {
+          setSaveStatus('error');
+          handleFirestoreError(err, OperationType.WRITE, docPath);
+        } finally {
+          setDataLoading(false);
+          // Safely release mutex lock after React state updates settle
+          setTimeout(() => {
+            isRemoteSyncRef.current = false;
+          }, 350);
         }
-        setDataLoading(false);
-        setTimeout(() => {
-          isRemoteSyncRef.current = false;
-        }, 1000);
       },
       (err) => {
+        // Rollback save status to error without wiping local storage
         setSaveStatus('error');
+        showToast('⚠️ تعذر مزامنة البيانات مع السحابة. بياناتك محفوظة محلياً.');
+        console.error('[Persistence] Firestore read error, local storage preserved:', err);
         handleFirestoreError(err, OperationType.GET, docPath);
         setDataLoading(false);
       }
@@ -318,7 +325,10 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       setSaveStatus('saved');
       console.log('[Persistence] Debounced sync committed to Cloud Firestore ✓');
     } catch (err) {
+      // Rollback UI save status to error without wiping local storage
       setSaveStatus('error');
+      showToast('⚠️ فشل حفظ التعديلات في السحابة. بياناتك محفوظة في المتصفح مؤقتاً.');
+      console.error('[Persistence] Firestore write error, local storage preserved:', err);
       handleFirestoreError(err, OperationType.WRITE, docPath);
     }
   };

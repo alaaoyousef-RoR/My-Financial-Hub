@@ -11,10 +11,10 @@ export interface IncomeItem {
 }
 
 export interface CarPlan {
-  monthlyInstallment: number; // 2,175
-  totalInstallments: number; // 60
-  paidInstallments: number; // 38
-  balloonPayment: number; // 37,000 (الدفعة الأخيرة)
+  monthlyInstallment: number;
+  totalInstallments: number;
+  paidInstallments: number;
+  balloonPayment: number;
   isPaidThisMonth?: boolean;
   notes?: string;
 }
