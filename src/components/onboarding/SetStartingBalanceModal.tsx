@@ -40,8 +40,6 @@ export const SetStartingBalanceModal: React.FC<SetStartingBalanceModalProps> = (
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const quickPresets = [0, 1000, 3000, 5000, 10000];
 
   const handleSubmit = async (overrideAmount?: number) => {
@@ -89,6 +87,8 @@ export const SetStartingBalanceModal: React.FC<SetStartingBalanceModalProps> = (
       setIsLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn font-['Readex_Pro',sans-serif]">

@@ -1,13 +1,15 @@
 import * as XLSX from 'xlsx';
 import { ExpenseCategory } from '../types/finance';
 
+export type TransactionType = 'DEBIT' | 'CREDIT';
+
 export interface ParsedBankTransaction {
   id: string;
   rawDate: string;
   date: string; // YYYY-MM-DD
   description: string;
   amount: number;
-  type: 'DEBIT' | 'CREDIT';
+  type: TransactionType;
   balance?: number;
   reference?: string;
   suggestedCategory: ExpenseCategory;
@@ -34,7 +36,7 @@ export interface ParseResult {
   detectedHeaders?: Record<string, string>;
 }
 
-// Comprehensive keyword categorization dictionary
+// Category keyword matching dictionary
 const CATEGORY_RULES: { category: ExpenseCategory; keywords: string[] }[] = [
   {
     category: 'طعام ومقاهي',
@@ -44,7 +46,8 @@ const CATEGORY_RULES: { category: ExpenseCategory; keywords: string[] }[] = [
       'جاهز', 'تويو', 'مرسول', 'شفز', 'بيك', 'albaik', 'starbucks', 'dunkin',
       'mcdonald', 'burger', 'kfc', 'hungerstation', 'jahez', 'toyou', 'mrsool',
       'cafe', 'coffee', 'bakery', 'restaurant', 'pastry', 'shawarma', 'pizza',
-      'maestro', 'subway', 'barns', 'half million', 'crav', 'caribou', 'costa'
+      'maestro', 'subway', 'barns', 'half million', 'crav', 'caribou', 'costa',
+      'meat', 'grill', 'kitchen', 'فلافل', 'عصير', 'شاي'
     ]
   },
   {
@@ -55,7 +58,8 @@ const CATEGORY_RULES: { category: ExpenseCategory; keywords: string[] }[] = [
       'ردتاغ', 'شي ان', 'علي اكسبرس', 'amazon', 'noon', 'jarir', 'extra', 'carrefour',
       'panda', 'othaim', 'lulu', 'danube', 'tamimi', 'zara', 'h&m', 'centrepoint',
       'shein', 'aliexpress', 'max', 'namshi', 'ikea', 'shopping', 'supermarket',
-      'hypermarket', 'mall', 'fashion', 'clothing', 'shoes', 'boutique', 'perfume'
+      'hypermarket', 'mall', 'fashion', 'clothing', 'shoes', 'boutique', 'perfume',
+      'عطور', 'ملابس', 'أقمشة', 'ساعة', 'ذهب'
     ]
   },
   {
@@ -65,24 +69,25 @@ const CATEGORY_RULES: { category: ExpenseCategory; keywords: string[] }[] = [
       'غسيل سيارات', 'مغسلة', 'زيت', 'كفرات', 'ورشة', 'صيانة سيارات', 'قطع غيار',
       'aldrees', 'sasco', 'naft', 'petrol', 'gasoline', 'fuel', 'petromin', 'بترومين',
       'oil change', 'car wash', 'tires', 'toyota', 'hyundai', 'ford', 'mechanic',
-      'auto', 'parking', 'مواقف', 'موقف'
+      'auto', 'parking', 'مواقف', 'موقف', 'سيارات'
     ]
   },
   {
     category: 'فواتير وخدمات',
     keywords: [
       'فاتورة', 'سداد', 'الاتصالات', 'اس تي سي', 'موبايلي', 'زين', 'سلام', 'كهرباء',
-      'مياه', 'بلدي', 'أبشر', 'ايجار', 'stc', 'mobily', 'zain', 'salam', 'seco',
+      'مياه', 'بلدي', 'أبشر', 'stc', 'mobily', 'zain', 'salam', 'seco',
       'sec', 'electricity', 'water', 'nwc', 'telecom', 'internet', 'bill', 'sadad',
-      'netflix', 'spotify', 'apple.com', 'google', 'youtube', 'subscription', 'icloud'
+      'netflix', 'spotify', 'apple.com', 'google', 'youtube', 'subscription', 'icloud',
+      'اشتراك', 'خدمات', 'وزارة'
     ]
   },
   {
     category: 'سكن ومستلزمات',
     keywords: [
-      'ايجار', 'سكن', 'شقة', 'عمارة', 'عقار', 'ابيات', 'هوم سنتر', 'هوم بوكس',
+      'ايجار', 'إيجار', 'سكن', 'شقة', 'عمارة', 'عقار', 'ابيات', 'هوم سنتر', 'هوم بوكس',
       'ايكيا', 'ساكو', 'rent', 'housing', 'furniture', 'homebox', 'home centre',
-      'saco', 'maintenance', 'سباكة', 'كهربائي', 'تكييف'
+      'saco', 'maintenance', 'سباكة', 'كهربائي', 'تكييف', 'أثاث', 'مفروشات'
     ]
   },
   {
@@ -91,7 +96,8 @@ const CATEGORY_RULES: { category: ExpenseCategory; keywords: string[] }[] = [
       'صيدلية', 'النهدي', 'الدواء', 'مستشفى', 'مستوصف', 'عيادة', 'طبيب', 'اسنان',
       'نظارات', 'بصريات', 'مختبر', 'تحاليل', 'دواء', 'علاج', 'حلاقة', 'صالون',
       'سبا', 'pharmacy', 'nahdi', 'dawaa', 'hospital', 'clinic', 'medical', 'dental',
-      'optics', 'lab', 'doctor', 'salon', 'barber', 'spa', 'fitness', 'gym', 'وقت اللياقة'
+      'optics', 'lab', 'doctor', 'salon', 'barber', 'spa', 'fitness', 'gym', 'وقت اللياقة',
+      'نادي', 'رياضة'
     ]
   },
   {
@@ -100,23 +106,17 @@ const CATEGORY_RULES: { category: ExpenseCategory; keywords: string[] }[] = [
       'سينما', 'فوكس', 'موفي', 'تذكرة', 'ملاهي', 'بوليفارد', 'فعالية', 'مهرجان',
       'حفلة', 'شاليه', 'منتجع', 'استراحة', 'فندق', 'طيران', 'حجز', 'cinema',
       'vox', 'muvi', 'amc', 'ticket', 'boulevard', 'hotel', 'resort', 'flight',
-      'booking', 'airbnb', 'entertainment', 'game', 'play'
-    ]
-  },
-  {
-    category: 'تغذية مخصص',
-    keywords: [
-      'راتب', 'مكافأة', 'حافز', 'أرباح', 'تحويل وارد', 'إيداع نقدي', 'إيداع صراف',
-      'استرداد', 'كاش باك', 'salary', 'payroll', 'allowance', 'bonus', 'dividend',
-      'inward transfer', 'cash deposit', 'atm deposit', 'refund', 'cashback', 'reversal'
+      'booking', 'airbnb', 'entertainment', 'game', 'play', 'موسم الرياض', 'فعاليات'
     ]
   }
 ];
 
 /**
- * Automatically classifies transaction description into an ExpenseCategory
+ * Automatically classifies transaction description into an ExpenseCategory.
+ * - CREDIT rows default to 'تغذية مخصص' (income/top-up).
+ * - DEBIT rows match merchant keywords and fallback safely to 'أخرى' (NOT 'تغذية مخصص').
  */
-export function autoCategorize(description: string, type: 'DEBIT' | 'CREDIT'): ExpenseCategory {
+export function autoCategorize(description: string, type: TransactionType): ExpenseCategory {
   if (type === 'CREDIT') {
     return 'تغذية مخصص';
   }
@@ -135,18 +135,64 @@ export function autoCategorize(description: string, type: 'DEBIT' | 'CREDIT'): E
 }
 
 /**
- * Normalizes Excel dates, serials, and diverse string formats into YYYY-MM-DD
+ * Strips Unicode directional formatting markers, tabs, and newlines.
+ * Collapses whitespace for reliable header matching across all banks.
  */
-export function normalizeDate(val: any): string {
+export function normalizeHeaderText(text: unknown): string {
+  if (text === null || text === undefined) return '';
+  return String(text)
+    // Strip invisible & directional Unicode markers (LTR/RTL marks, embeddings, overrides)
+    .replace(/[\u200B-\u200F\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
+    // Replace newlines, line breaks, and tabs with a standard space
+    .replace(/[\r\n\t]+/g, ' ')
+    // Remove parentheses, brackets, and commas
+    .replace(/[()[\]{}،,]/g, ' ')
+    // Collapse extra spaces
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Parses numeric cell values, gracefully handling negative signs (Alinma debit style),
+ * currency codes, commas, and scientific notation. Returns null if invalid or zero.
+ */
+export function parseNumericAmount(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') {
+    return isNaN(val) ? null : val;
+  }
+
+  const cleaned = String(val)
+    .replace(/[\u200B-\u200F\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
+    .replace(/[^0-9.-]/g, '')
+    .trim();
+
+  if (!cleaned || cleaned === '-' || cleaned === '.') return null;
+
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Convenience helper returning a positive absolute float
+ */
+export function cleanAmount(val: unknown): number {
+  return Math.abs(parseNumericAmount(val) || 0);
+}
+
+/**
+ * Normalizes Excel dates, numerical serial numbers, and ISO strings into YYYY-MM-DD
+ */
+export function normalizeDate(val: unknown): string {
   if (!val) return new Date().toISOString().split('T')[0];
 
-  // If already a JavaScript Date object
   if (val instanceof Date && !isNaN(val.getTime())) {
     return val.toISOString().split('T')[0];
   }
 
-  // If Excel numerical serial date (e.g. 45200)
-  if (typeof val === 'number' && val > 20000 && val < 60000) {
+  // Excel serial date representation
+  if (typeof val === 'number' && val > 20000 && val < 65000) {
     const utcDays = Math.floor(val - 25569);
     const utcValue = utcDays * 86400;
     const dateInfo = new Date(utcValue * 1000);
@@ -156,7 +202,9 @@ export function normalizeDate(val: any): string {
     return `${y}-${m}-${d}`;
   }
 
-  const str = String(val).trim();
+  const str = String(val)
+    .replace(/[\u200B-\u200F\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
+    .trim();
 
   // YYYY-MM-DD or YYYY/MM/DD
   const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
@@ -176,7 +224,6 @@ export function normalizeDate(val: any): string {
     return `${y}-${m}-${d}`;
   }
 
-  // Attempt standard Date parsing
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     return parsed.toISOString().split('T')[0];
@@ -185,75 +232,74 @@ export function normalizeDate(val: any): string {
   return new Date().toISOString().split('T')[0];
 }
 
+type HeaderType = 'date' | 'description' | 'debit' | 'credit' | 'amount' | 'type' | 'balance' | 'reference';
+
 /**
- * Cleans numerical currency string / number to a valid positive float
+ * Matches normalized cell header string to semantic column roles.
+ * Handles multiline Arabic/English compound headers e.g. "سحب (مدين)\nDebit".
  */
-export function cleanAmount(val: any): number {
-  if (typeof val === 'number') return Math.abs(val);
-  if (!val) return 0;
-  
-  // Remove currency words, commas, quotes, and non-numeric characters except '.' and '-'
-  const cleaned = String(val)
-    .replace(/[^\d.-]/g, '')
-    .trim();
-
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : Math.abs(num);
-}
-
-// Known bank header aliases
-const HEADER_PATTERNS = {
-  date: [
-    'تاريخ العملية', 'التاريخ', 'تاريخ القيد', 'تاريخ المعاملة', 'تاريخ الحركة',
-    'transaction date', 'trans date', 'date', 'value date', 'posting date', 'booking date', 'txn date'
-  ],
-  description: [
-    'تفاصيل العملية', 'الوصف', 'البيان', 'تفاصيل الحركة', 'تفاصيل المعاملة', 'شرح القيد', 'الجهة', 'ملاحظات',
-    'description', 'details', 'transaction details', 'narrative', 'particulars', 'remarks', 'merchant', 'trans details'
-  ],
-  debit: [
-    'سحب', 'مدين', 'مبلغ السحب', 'المبلغ المدين', 'المصروف', 'المسحوبات',
-    'debit', 'debit amount', 'withdrawal', 'dr', 'out', 'paid out', 'spent'
-  ],
-  credit: [
-    'إيداع', 'دائن', 'مبلغ الإيداع', 'المبلغ الدائن', 'المقبوضات', 'الوارد',
-    'credit', 'credit amount', 'deposit', 'cr', 'in', 'paid in', 'received'
-  ],
-  amount: [
-    'المبلغ', 'قيمة العملية', 'مبلغ العملية', 'القيمة',
-    'amount', 'transaction amount', 'txn amount', 'value'
-  ],
-  type: [
-    'نوع العملية', 'النوع', 'طبيعة القيد',
-    'type', 'transaction type', 'txn type', 'indicator', 'dr/cr', 'cr/dr'
-  ],
-  balance: [
-    'الرصيد', 'الرصيد بعد العملية', 'الرصيد الحالي',
-    'balance', 'running balance', 'closing balance', 'available balance'
-  ],
-  reference: [
-    'المرجع', 'رقم المرجع', 'رقم العملية', 'رمز العملية',
-    'reference', 'ref no', 'ref number', 'transaction id', 'txn id', 'sequence'
-  ]
-};
-
-function matchHeaderType(cellText: string): string | null {
-  const norm = cellText.toLowerCase().trim();
+function matchHeaderType(rawCellText: unknown): HeaderType | null {
+  const norm = normalizeHeaderText(rawCellText);
   if (!norm) return null;
 
-  for (const [key, patterns] of Object.entries(HEADER_PATTERNS)) {
-    for (const pat of patterns) {
-      if (norm === pat || norm.includes(pat)) {
-        return key;
-      }
-    }
+  // 1. Debit Column: matches 'debit', 'سحب', 'مدين', 'dr'
+  if (norm.includes('debit') || norm.includes('سحب') || norm.includes('مدين') || norm === 'dr') {
+    return 'debit';
   }
+
+  // 2. Credit Column: matches 'credit', 'إيداع', 'ايداع', 'دائن', 'cr'
+  if (norm.includes('credit') || norm.includes('إيداع') || norm.includes('ايداع') || norm.includes('دائن') || norm === 'cr') {
+    return 'credit';
+  }
+
+  // 3. Date Column: matches 'date', 'تاريخ'
+  if (norm.includes('date') || norm.includes('تاريخ')) {
+    return 'date';
+  }
+
+  // 4. Description Column: matches 'description', 'details', 'narrative', 'particulars', 'remarks', 'merchant', 'تفاصيل', 'الوصف', 'البيان', 'شرح'
+  if (
+    norm.includes('description') ||
+    norm.includes('details') ||
+    norm.includes('narrative') ||
+    norm.includes('particulars') ||
+    norm.includes('remarks') ||
+    norm.includes('merchant') ||
+    norm.includes('تفاصيل') ||
+    norm.includes('الوصف') ||
+    norm.includes('البيان') ||
+    norm.includes('شرح') ||
+    norm.includes('الجهة')
+  ) {
+    return 'description';
+  }
+
+  // 5. Balance Column
+  if (norm.includes('balance') || norm.includes('الرصيد')) {
+    return 'balance';
+  }
+
+  // 6. Reference Column
+  if (norm.includes('reference') || norm.includes('ref') || norm.includes('مرجع') || norm.includes('المرجع')) {
+    return 'reference';
+  }
+
+  // 7. Single Combined Amount Column (only if not debit or credit)
+  if (norm.includes('amount') || norm.includes('المبلغ') || norm.includes('قيمة')) {
+    return 'amount';
+  }
+
+  // 8. Transaction Type Column
+  if (norm.includes('type') || norm.includes('نوع') || norm.includes('طبيعة')) {
+    return 'type';
+  }
+
   return null;
 }
 
 /**
- * Core Parser Function: Reads raw file buffer using SheetJS, locates headers,
- * extracts records, and returns normalized transactions.
+ * Robust Client-Side Bank Statement Ingestion Utility (SheetJS).
+ * Parses Alinma, Al Rajhi, SNB, and Riyadh bank .xlsx / .csv statements.
  */
 export async function parseBankStatement(file: File): Promise<ParseResult> {
   try {
@@ -273,12 +319,11 @@ export async function parseBankStatement(file: File): Promise<ParseResult> {
       };
     }
 
-    // Inspect first active sheet
     const firstSheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[firstSheetName];
 
-    // Convert sheet to 2D array of rows
-    const rawRows = XLSX.utils.sheet_to_json<any[]>(sheet, {
+    // Read rows as 2D array of unknown cells
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
       header: 1,
       defval: '',
       blankrows: false
@@ -289,24 +334,24 @@ export async function parseBankStatement(file: File): Promise<ParseResult> {
         success: false,
         transactions: [],
         summary: createEmptySummary(),
-        error: 'الملف فارغ أو لا يحتوي على صفوف بيانات كافية.'
+        error: 'الملف فارغ أو لا يحتوي على صفوف كافية.'
       };
     }
 
-    // Find the header row (search first 20 rows)
+    // Locate header row across first 30 rows
     let headerRowIndex = -1;
-    let headerIndices: Record<string, number> = {};
-    let detectedHeaders: Record<string, string> = {};
+    let headerIndices: Partial<Record<HeaderType, number>> = {};
+    const detectedHeaders: Record<string, string> = {};
 
-    for (let r = 0; r < Math.min(rawRows.length, 25); r++) {
+    for (let r = 0; r < Math.min(rawRows.length, 30); r++) {
       const row = rawRows[r];
       if (!Array.isArray(row)) continue;
 
-      const matched: Record<string, number> = {};
+      const matched: Partial<Record<HeaderType, number>> = {};
       const detectedMap: Record<string, string> = {};
 
       row.forEach((cell, colIndex) => {
-        const text = String(cell || '').trim();
+        const text = String(cell ?? '');
         const matchedKey = matchHeaderType(text);
         if (matchedKey && matched[matchedKey] === undefined) {
           matched[matchedKey] = colIndex;
@@ -314,17 +359,17 @@ export async function parseBankStatement(file: File): Promise<ParseResult> {
         }
       });
 
-      // Need at least date AND (debit or credit or amount or description)
       const hasDate = matched.date !== undefined;
-      const hasAmountOrDebitCredit = 
-        matched.debit !== undefined || 
-        matched.credit !== undefined || 
-        matched.amount !== undefined;
+      const hasDebit = matched.debit !== undefined;
+      const hasCredit = matched.credit !== undefined;
+      const hasAmount = matched.amount !== undefined;
+      const hasDescription = matched.description !== undefined;
 
-      if (hasDate && (hasAmountOrDebitCredit || matched.description !== undefined)) {
+      // Valid header requires Date AND (Debit or Credit or Amount or Description)
+      if (hasDate && (hasDebit || hasCredit || hasAmount || hasDescription)) {
         headerRowIndex = r;
         headerIndices = matched;
-        detectedHeaders = detectedMap;
+        Object.assign(detectedHeaders, detectedMap);
         break;
       }
     }
@@ -334,7 +379,7 @@ export async function parseBankStatement(file: File): Promise<ParseResult> {
         success: false,
         transactions: [],
         summary: createEmptySummary(),
-        error: 'تعذر التعرف التلقائي على أعمدة كشف الحساب. يرجى التأكد من وجود أعمدة التاريخ، الوصف، والمبلغ أو السحب/الإيداع.'
+        error: 'تعذر التعرف التلقائي على أعمدة كشف الحساب. يرجى التأكد من احتواء الملف على أعمدة التاريخ، الوصف، والسحب/الإيداع.'
       };
     }
 
@@ -343,80 +388,93 @@ export async function parseBankStatement(file: File): Promise<ParseResult> {
     // Parse data rows
     for (let r = headerRowIndex + 1; r < rawRows.length; r++) {
       const row = rawRows[r];
-      if (!Array.isArray(row) || row.every(cell => !cell || String(cell).trim() === '')) {
+      if (!Array.isArray(row) || row.every(cell => cell === null || cell === undefined || String(cell).trim() === '')) {
         continue;
       }
 
-      // Extract raw fields
-      const rawDate = headerIndices.date !== undefined ? row[headerIndices.date] : '';
-      const rawDesc = headerIndices.description !== undefined ? row[headerIndices.description] : '';
-      const rawDebit = headerIndices.debit !== undefined ? row[headerIndices.debit] : '';
-      const rawCredit = headerIndices.credit !== undefined ? row[headerIndices.credit] : '';
-      const rawAmount = headerIndices.amount !== undefined ? row[headerIndices.amount] : '';
-      const rawType = headerIndices.type !== undefined ? row[headerIndices.type] : '';
-      const rawBalance = headerIndices.balance !== undefined ? row[headerIndices.balance] : '';
-      const rawRef = headerIndices.reference !== undefined ? row[headerIndices.reference] : '';
-
-      // Skip summary or footer rows
-      const combinedRowText = row.map(c => String(c || '').toLowerCase()).join(' ');
+      // Check for footer / summary rows to skip
+      const combinedRowText = row.map(c => normalizeHeaderText(c)).join(' ');
       if (
         combinedRowText.includes('total') ||
         combinedRowText.includes('المجموع') ||
         combinedRowText.includes('إجمالي') ||
         combinedRowText.includes('closing balance') ||
         combinedRowText.includes('opening balance') ||
-        combinedRowText.includes('الرصيد الافتتاحي')
+        combinedRowText.includes('الرصيد الافتتاحي') ||
+        combinedRowText.includes('الرصيد الختامي') ||
+        combinedRowText.includes('هاتف الإنماء') ||
+        combinedRowText.includes('alinma phone') ||
+        combinedRowText.includes('customer service') ||
+        combinedRowText.includes('disclaimer') ||
+        combinedRowText.includes('هذا الكشف صادر')
       ) {
         continue;
       }
 
-      const debitVal = cleanAmount(rawDebit);
-      const creditVal = cleanAmount(rawCredit);
-      const generalAmount = cleanAmount(rawAmount);
+      // Extract raw cell values
+      const rawDate = headerIndices.date !== undefined ? row[headerIndices.date] : null;
+      const rawDesc = headerIndices.description !== undefined ? row[headerIndices.description] : null;
+      const rawDebit = headerIndices.debit !== undefined ? row[headerIndices.debit] : null;
+      const rawCredit = headerIndices.credit !== undefined ? row[headerIndices.credit] : null;
+      const rawAmount = headerIndices.amount !== undefined ? row[headerIndices.amount] : null;
+      const rawType = headerIndices.type !== undefined ? row[headerIndices.type] : null;
+      const rawBalance = headerIndices.balance !== undefined ? row[headerIndices.balance] : null;
+      const rawRef = headerIndices.reference !== undefined ? row[headerIndices.reference] : null;
+
+      const numDebit = parseNumericAmount(rawDebit);
+      const numCredit = parseNumericAmount(rawCredit);
+      const numAmount = parseNumericAmount(rawAmount);
 
       let finalAmount = 0;
-      let finalType: 'DEBIT' | 'CREDIT' = 'DEBIT';
+      let finalType: TransactionType = 'DEBIT';
 
-      if (debitVal > 0) {
-        finalAmount = debitVal;
+      // 1. Separate Debit & Credit columns
+      if (numDebit !== null && Math.abs(numDebit) > 0.0001) {
+        // In Alinma statements, debits are stored with negative sign (e.g. -136.00). Use Math.abs.
+        finalAmount = Math.abs(numDebit);
         finalType = 'DEBIT';
-      } else if (creditVal > 0) {
-        finalAmount = creditVal;
+      } else if (numCredit !== null && Math.abs(numCredit) > 0.0001) {
+        finalAmount = Math.abs(numCredit);
         finalType = 'CREDIT';
-      } else if (generalAmount > 0) {
-        finalAmount = generalAmount;
-        // Inspect rawType or sign
-        const typeStr = String(rawType || '').toLowerCase();
-        const amtStr = String(rawAmount || '').toLowerCase();
+      } else if (numAmount !== null && Math.abs(numAmount) > 0.0001) {
+        // Single Amount column with sign or type indicator
+        finalAmount = Math.abs(numAmount);
+        const typeStr = normalizeHeaderText(rawType);
+        const amtStr = String(rawAmount || '').trim();
 
         if (
-          typeStr.includes('cr') || 
-          typeStr.includes('credit') || 
-          typeStr.includes('إيداع') || 
+          typeStr.includes('cr') ||
+          typeStr.includes('credit') ||
+          typeStr.includes('إيداع') ||
+          typeStr.includes('ايداع') ||
           typeStr.includes('دائن') ||
           amtStr.startsWith('+')
         ) {
           finalType = 'CREDIT';
+        } else if (numAmount < 0 || amtStr.startsWith('-') || typeStr.includes('dr') || typeStr.includes('debit') || typeStr.includes('سحب')) {
+          finalType = 'DEBIT';
         } else {
           finalType = 'DEBIT';
         }
       }
 
-      // Skip rows with 0 amount or no valid date
+      // Skip rows with zero or unresolvable amount
       if (finalAmount <= 0) continue;
 
       const normalizedDate = normalizeDate(rawDate);
-      const description = String(rawDesc || '').trim() || (finalType === 'CREDIT' ? 'إيداع بنكي' : 'عملية مصرفية');
+      const description = String(rawDesc ?? '').trim() || (finalType === 'CREDIT' ? 'إيداع بنكي' : 'عملية سحب / شراء');
       const suggestedCategory = autoCategorize(description, finalType);
+
+      const parsedBalance = parseNumericAmount(rawBalance);
 
       parsedItems.push({
         id: `stmt-${Date.now()}-${r}-${Math.random().toString(36).substr(2, 6)}`,
-        rawDate: String(rawDate),
+        rawDate: String(rawDate ?? ''),
         date: normalizedDate,
         description,
         amount: Math.round(finalAmount * 100) / 100,
         type: finalType,
-        balance: rawBalance ? cleanAmount(rawBalance) : undefined,
+        balance: parsedBalance !== null ? Math.round(parsedBalance * 100) / 100 : undefined,
         reference: rawRef ? String(rawRef).trim() : undefined,
         suggestedCategory,
         selectedCategory: suggestedCategory,
@@ -429,7 +487,7 @@ export async function parseBankStatement(file: File): Promise<ParseResult> {
         success: false,
         transactions: [],
         summary: createEmptySummary(),
-        error: 'لم يتم العثور على أي عمليات مالية قابلة للاستيراد في الملف.'
+        error: 'لم يتم العثور على أي عمليات مالية صالحة في الملف.'
       };
     }
 
@@ -443,19 +501,20 @@ export async function parseBankStatement(file: File): Promise<ParseResult> {
       detectedHeaders
     };
 
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'صيغة غير متوافقة';
     console.error('Error parsing bank statement file:', err);
     return {
       success: false,
       transactions: [],
       summary: createEmptySummary(),
-      error: `حدث خطأ أثناء قراءة الملف: ${err.message || 'صيغة غير متوافقة'}`
+      error: `حدث خطأ أثناء قراءة الملف: ${errorMsg}`
     };
   }
 }
 
 /**
- * Calculates aggregates for parsed statement items
+ * Calculates aggregates for parsed statement items based on active selection.
  */
 export function computeStatementSummary(items: ParsedBankTransaction[]): StatementSummary {
   const selectedItems = items.filter(i => i.selected);

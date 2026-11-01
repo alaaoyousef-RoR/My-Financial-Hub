@@ -86,7 +86,25 @@ export const StatementImportModal: React.FC<StatementImportModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen) return null;
+  // Filtered view for preview table - defined unconditionally at top level
+  const visibleTransactions = useMemo(() => {
+    return parsedTransactions.filter(item => {
+      // Type Filter
+      if (typeFilter !== 'ALL' && item.type !== typeFilter) return false;
+
+      // Text Search
+      if (searchFilter.trim()) {
+        const query = searchFilter.toLowerCase();
+        const matchesDesc = item.description.toLowerCase().includes(query);
+        const matchesCat = item.selectedCategory.toLowerCase().includes(query);
+        const matchesAmt = item.amount.toString().includes(query);
+        const matchesDate = item.date.includes(query);
+        return matchesDesc || matchesCat || matchesAmt || matchesDate;
+      }
+
+      return true;
+    });
+  }, [parsedTransactions, typeFilter, searchFilter]);
 
   // Handle Drag & Drop
   const handleDragOver = (e: React.DragEvent) => {
@@ -143,9 +161,10 @@ export const StatementImportModal: React.FC<StatementImportModalProps> = ({
       setParsedTransactions(result.transactions);
       setSummary(result.summary);
       setStep('preview');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errDetail = err instanceof Error ? err.message : '';
       console.error('Error in statement ingestion:', err);
-      setErrorMessage('حدث خطأ غير متوقع أثناء معالجة الكشف: ' + (err.message || ''));
+      setErrorMessage(`حدث خطأ غير متوقع أثناء معالجة الكشف: ${errDetail}`);
     } finally {
       setIsLoading(false);
     }
@@ -182,25 +201,7 @@ export const StatementImportModal: React.FC<StatementImportModalProps> = ({
     });
   };
 
-  // Filtered view for preview table
-  const visibleTransactions = useMemo(() => {
-    return parsedTransactions.filter(item => {
-      // Type Filter
-      if (typeFilter !== 'ALL' && item.type !== typeFilter) return false;
 
-      // Text Search
-      if (searchFilter.trim()) {
-        const query = searchFilter.toLowerCase();
-        const matchesDesc = item.description.toLowerCase().includes(query);
-        const matchesCat = item.selectedCategory.toLowerCase().includes(query);
-        const matchesAmt = item.amount.toString().includes(query);
-        const matchesDate = item.date.includes(query);
-        return matchesDesc || matchesCat || matchesAmt || matchesDate;
-      }
-
-      return true;
-    });
-  }, [parsedTransactions, typeFilter, searchFilter]);
 
   // Execute Firestore writeBatch and commit to state
   const handleConfirmImport = async () => {
@@ -289,9 +290,10 @@ export const StatementImportModal: React.FC<StatementImportModalProps> = ({
 
       handleResetModal();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errDetail = err instanceof Error ? err.message : 'خطأ غير متوقع';
       console.error('Error writing batch transactions to Firestore:', err);
-      setErrorMessage(`فشل حفظ العمليات في السحابة: ${err.message || 'خطأ غير متوقع'}`);
+      setErrorMessage(`فشل حفظ العمليات في السحابة: ${errDetail}`);
       setStep('preview');
     }
   };
@@ -305,6 +307,8 @@ export const StatementImportModal: React.FC<StatementImportModalProps> = ({
     setSearchFilter('');
     setTypeFilter('ALL');
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn font-['Readex_Pro',sans-serif]">

@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
+  signInAnonymously,
   signOut 
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -16,6 +17,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string) => Promise<void>;
+  signInAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -46,6 +48,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await createUserWithEmailAndPassword(auth, email, pass);
   };
 
+  const signInAsGuest = async () => {
+    await signInAnonymously(auth);
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
@@ -58,6 +64,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
+        signInAsGuest,
         logout
       }}
     >
