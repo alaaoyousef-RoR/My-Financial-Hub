@@ -80,9 +80,10 @@ export const SetStartingBalanceModal: React.FC<SetStartingBalanceModalProps> = (
         }
         onClose();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving opening balance:', err);
-      setError(err.message || 'حدث خطأ أثناء حفظ الرصيد الافتتاحي.');
+      const errMsg = err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ الرصيد الافتتاحي.';
+      setError(errMsg);
     } finally {
       setIsLoading(false);
     }

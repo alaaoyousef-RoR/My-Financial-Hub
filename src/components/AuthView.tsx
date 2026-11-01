@@ -26,16 +26,18 @@ export const AuthView: React.FC = () => {
       } else {
         try {
           await signInWithEmail(cleanEmail, password);
-        } catch (signInErr: any) {
+        } catch (signInErr) {
+          const authError = signInErr as { code?: string; message?: string };
           // If user does not exist or credentials invalid, attempt seamless registration for new users
-          if (signInErr?.code === 'auth/invalid-credential' || signInErr?.code === 'auth/user-not-found') {
+          if (authError?.code === 'auth/invalid-credential' || authError?.code === 'auth/user-not-found') {
             try {
               await signUpWithEmail(cleanEmail, password);
               return;
-            } catch (signUpErr: any) {
-              if (signUpErr?.code === 'auth/email-already-in-use') {
+            } catch (signUpErr) {
+              const suError = signUpErr as { code?: string; message?: string };
+              if (suError?.code === 'auth/email-already-in-use') {
                 setError('كلمة المرور غير صحيحة لهذا الحساب. يرجى التأكد والمحاولة مجدداً.');
-              } else if (signUpErr?.code === 'auth/weak-password') {
+              } else if (suError?.code === 'auth/weak-password') {
                 setError('كلمة المرور يجب أن تتكون من 6 خانات على الأقل.');
               } else {
                 setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
@@ -46,17 +48,18 @@ export const AuthView: React.FC = () => {
           throw signInErr;
         }
       }
-    } catch (err: any) {
-      if (err?.code === 'auth/email-already-in-use') {
+    } catch (err) {
+      const authError = err as { code?: string; message?: string };
+      if (authError?.code === 'auth/email-already-in-use') {
         setError('البريد الإلكتروني مسجل مسبقاً. تم تحويلك لتسجيل الدخول.');
         setIsSignUp(false);
-      } else if (err?.code === 'auth/weak-password') {
+      } else if (authError?.code === 'auth/weak-password') {
         setError('كلمة المرور ضعيفة. يجب أن تتكون من 6 خانات على الأقل.');
-      } else if (err?.code === 'auth/invalid-email') {
+      } else if (authError?.code === 'auth/invalid-email') {
         setError('صيغة البريد الإلكتروني غير صحيحة.');
-      } else if (err?.code === 'auth/too-many-requests') {
+      } else if (authError?.code === 'auth/too-many-requests') {
         setError('تم تقييد المحاولات مؤقتاً بسبب تكرار المحاولة. يرجى الانتظار قليلاً.');
-      } else if (err?.code === 'auth/invalid-credential' || err?.code === 'auth/user-not-found' || err?.code === 'auth/wrong-password') {
+      } else if (authError?.code === 'auth/invalid-credential' || authError?.code === 'auth/user-not-found' || authError?.code === 'auth/wrong-password') {
         setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
       } else {
         setError('تعذر تسجيل الدخول. يرجى التأكد من البيانات والمحاولة مجدداً.');

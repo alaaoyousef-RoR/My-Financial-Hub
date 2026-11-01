@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { 
   ExpenseCategory, 
   PaymentMethod, 
-  PlatformType
+  PlatformType,
+  IncomeCategory,
+  FixedObligationCategory,
+  SavingsCategory,
+  LiabilityCategory
 } from '../types/finance';
 import { X, Receipt, CreditCard, HandCoins, Banknote, Car, PiggyBank, ShieldAlert } from 'lucide-react';
 
@@ -283,7 +287,7 @@ export const AddInstallmentModal: React.FC<AddInstallmentModalProps> = ({ isOpen
 interface AddIncomeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, amount: number, category: any, notes?: string) => void;
+  onSave: (title: string, amount: number, category: IncomeCategory, notes?: string) => void;
 }
 
 export const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave }) => {
@@ -373,7 +377,7 @@ export const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose,
 interface AddFixedModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, amount: number, category: any, notes?: string) => void;
+  onSave: (title: string, amount: number, category: FixedObligationCategory, notes?: string) => void;
 }
 
 export const AddFixedObligationModal: React.FC<AddFixedModalProps> = ({ isOpen, onClose, onSave }) => {
@@ -462,7 +466,7 @@ export const AddFixedObligationModal: React.FC<AddFixedModalProps> = ({ isOpen, 
 interface AddSavingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, amount: number, category: any, notes?: string) => void;
+  onSave: (title: string, amount: number, category: SavingsCategory, notes?: string) => void;
 }
 
 export const AddSavingsModal: React.FC<AddSavingsModalProps> = ({ isOpen, onClose, onSave }) => {
@@ -623,7 +627,7 @@ export const AddReceivableModal: React.FC<AddReceivableModalProps> = ({ isOpen, 
 interface AddLiabilityModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, amount: number, dueDate: string, category: any, notes?: string) => void;
+  onSave: (title: string, amount: number, dueDate: string, category: LiabilityCategory, notes?: string) => void;
 }
 
 export const AddLiabilityModal: React.FC<AddLiabilityModalProps> = ({ isOpen, onClose, onSave }) => {

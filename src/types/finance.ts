@@ -1,111 +1,50 @@
-export type FrequencyType = 'monthly' | 'one-time' | 'one_time';
+/**
+ * Backward-Compatible Domain Schema Adapter
+ * Re-exports canonical definitions from `src/types/types.ts`.
+ */
 
-export interface IncomeItem {
-  id: string;
-  title: string;
-  amount: number;
-  frequency: FrequencyType;
-  category: 'راتب أساسي' | 'عمل حر / استشارات' | 'أرباح واستثمارات' | 'مكافآت وحوافز' | 'أخرى';
-  isRecurring: boolean;
-  notes?: string;
-}
+export type { UserProfile, UserFinancialSettings } from './userProfile';
 
-export interface CarPlan {
-  monthlyInstallment: number;
-  totalInstallments: number;
-  paidInstallments: number;
-  balloonPayment: number;
-  isPaidThisMonth?: boolean;
-  notes?: string;
-}
+// Re-export canonical domain types from types.ts
+export type {
+  MonthStatus,
+  TransactionType,
+  RecurrencePattern,
+  FrequencyType,
+  PlatformType,
+  ExpenseCategory,
+  IncomeCategory,
+  FixedObligationCategory,
+  SavingsCategory,
+  LiabilityCategory,
+  PaymentMethod,
+  AccountType,
+  Transaction,
+  InstallmentPlan,
+  InstallmentRecord,
+  ExpenseRecord,
+  FixedObligation,
+  CarPlan,
+  IncomeItem,
+  SavingsItem,
+  LiabilityItem,
+  ReceivableRecord,
+  AccountBalancesState,
+  FinancialTransaction,
+  MonthlyRecordSummary,
+  MonthlyObligationSnapshot,
+  MonthlyLedger,
+  ForecastingInputs,
+  ProjectedMonth,
+  ProjectionModel,
+  FinancialDataExportEnvelope,
+  MonthItem,
+  MonthContextState
+} from './types';
 
-export interface FixedObligation {
-  id: string;
-  title: string;
-  amount: number;
-  category: 'سيارة' | 'سكن وإيجار' | 'بنزين وتشغيل' | 'فواتير منزل' | 'تأمين' | 'أخرى';
-  dueDay?: number;
-  isPaidThisMonth?: boolean;
-  notes?: string;
-}
+export type { MonthlyRecord as CanonicalMonthlyRecord } from './types';
 
-export type PlatformType = 'Tamara' | 'Tabby' | 'Bank' | 'Other';
-
-export interface InstallmentRecord {
-  id: string;
-  name: string;
-  platform: PlatformType;
-  amount: number;
-  start: string;
-  end: string;
-  remainingMonths: number;
-  totalMonths?: number;
-  paidMonths?: number;
-  isPaidThisMonth?: boolean;
-  remainingNote?: string;
-  status: 'active' | 'completed';
-  category?: string;
-}
-
-export type ExpenseCategory = 
-  | 'طعام ومقاهي'
-  | 'تسوق وشخصي'
-  | 'بنزين وسيارة'
-  | 'فواتير وخدمات'
-  | 'سكن ومستلزمات'
-  | 'صحة وصيدلية'
-  | 'صحة وعناية'
-  | 'ترفيه وخروجات'
-  | 'تغذية مخصص'
-  | 'أخرى';
-
-export type PaymentMethod = 
-  | 'مدى / بطاقة بنكية'
-  | 'أبل باي (Apple Pay)'
-  | 'كاش'
-  | 'تمارا'
-  | 'تابي'
-  | 'تحويل بنكي';
-
-export interface ExpenseRecord {
-  id: string;
-  desc: string;
-  amount: number;
-  category: ExpenseCategory;
-  method: PaymentMethod;
-  date: string;
-  type?: 'EXPENSE' | 'TOP_UP' | 'ADJUSTMENT';
-}
-
-export interface SavingsItem {
-  id: string;
-  title: string;
-  amount: number;
-  category: 'صندوق طوارئ' | 'استثمار ونمو' | 'مخصص الدفعة الأخيرة للسيارة' | 'ادخار عام';
-  date: string;
-  notes?: string;
-}
-
-export interface LiabilityItem {
-  id: string;
-  title: string;
-  amount: number;
-  dueDate: string;
-  category: 'دفعة سيارة أخيرة' | 'دين شخصي' | 'قرض بنكي' | 'التزام مؤجل';
-  status: 'مستحق' | 'مسدد';
-  notes?: string;
-}
-
-export interface ReceivableRecord {
-  id: string;
-  name: string;
-  amount: number;
-  status: 'معلق' | 'تم التحصيل' | 'مستلم';
-  date: string;
-  notes?: string;
-  routedTo?: 'income' | 'bnpl_payoff' | 'savings';
-}
-
+// Timeline / projection interface used by existing dashboard charts, tables and KPI cards
 export interface MonthlyRecord {
   id: string;
   month: string;
@@ -115,67 +54,24 @@ export interface MonthlyRecord {
   gas: number;
   tamara: number;
   tabby: number;
-  personalExpensesBudget?: number;
-  savingsBudget?: number;
   note?: string;
-}
-
-export interface AccountBalancesState {
-  checkingBalance: number;
-  savingsBalance: number;
-  emergencyTarget?: number;
-  lastUpdated?: string;
-  isMasked?: boolean;
-}
-
-export interface FinancialTransaction {
-  id: string;
-  type: 'bnpl_installment' | 'savings_deposit' | 'expense' | 'income' | 'car_installment';
-  title: string;
-  amount: number;
-  date: string;
-  sourceAccount: 'checking' | 'savings' | 'external';
-  destinationAccount?: 'checking' | 'savings' | 'external';
-  relatedId?: string;
-  notes?: string;
+  monthKey?: string;
+  label?: string;
+  year?: number;
+  monthIndex?: number;
+  status?: import('./types').MonthStatus;
+  isLocked?: boolean;
 }
 
 export interface UnifiedAppState {
-  accounts: AccountBalancesState;
-  installments: InstallmentRecord[];
-  expenses: ExpenseRecord[];
-  savings: SavingsItem[];
-  incomes: IncomeItem[];
-  fixedObligations: FixedObligation[];
-  carPlan: CarPlan;
-  receivables: ReceivableRecord[];
+  accounts: import('./types').AccountBalancesState;
+  installments: import('./types').InstallmentPlan[];
+  expenses: import('./types').ExpenseRecord[];
+  savings: import('./types').SavingsItem[];
+  incomes: import('./types').IncomeItem[];
+  fixedObligations: import('./types').FixedObligation[];
+  carPlan: import('./types').CarPlan;
+  receivables: import('./types').ReceivableRecord[];
   monthlyData: MonthlyRecord[];
-  transactions: FinancialTransaction[];
-}
-
-export interface MonthItem {
-  id: string;
-  name: string;
-  year: number;
-  monthIndex: number;
-  isCurrentMonth: boolean;
-  isFuture: boolean;
-  isPast: boolean;
-  yearMonth?: string;
-  monthOffset?: number;
-  milestoneTag?: string;
-}
-
-export interface MonthContextState {
-  selectedMonth: MonthItem;
-  selectedMonthIndex: number;
-  availableMonths: MonthItem[];
-  isReadOnlySimulation: boolean;
-  currentYearMonth: string;
-  selectedYearMonth: string;
-  goToNextMonth: () => void;
-  goToPrevMonth: () => void;
-  goToCurrentMonth: () => void;
-  selectMonthByIndex: (index: number) => void;
-  selectMonthByYearMonth: (yearMonth: string) => void;
+  transactions: import('./types').FinancialTransaction[];
 }

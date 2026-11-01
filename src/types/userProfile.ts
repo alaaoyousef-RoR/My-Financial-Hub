@@ -1,3 +1,17 @@
+import { 
+  IncomeItem, 
+  CarPlan, 
+  FixedObligation, 
+  InstallmentPlan, 
+  ExpenseRecord, 
+  SavingsItem, 
+  LiabilityItem, 
+  ReceivableRecord, 
+  MonthlyRecord,
+  AccountBalancesState,
+  FinancialTransaction
+} from './types';
+
 export interface UserFinancialMetrics {
   openingBalance: number;
   currentBalance: number;
@@ -24,29 +38,17 @@ export interface UserProfile extends UserFinancialMetrics {
 
 export interface CleanSlateFinancialState {
   userId: string;
-  incomes: any[];
-  carPlan: {
-    monthlyInstallment: number;
-    totalInstallments: number;
-    paidInstallments: number;
-    balloonPayment: number;
-    isPaidThisMonth: boolean;
-  };
-  fixedObligations: any[];
-  installments: any[];
-  expenses: any[];
-  savings: any[];
-  liabilities: any[];
-  receivables: any[];
-  monthlyData: any[];
-  accountBalances: {
-    checkingBalance: number;
-    savingsBalance: number;
-    emergencyTarget: number;
-    isMasked: boolean;
-    lastUpdated: string;
-  };
-  transactions: any[];
+  incomes: IncomeItem[];
+  carPlan: CarPlan;
+  fixedObligations: FixedObligation[];
+  installments: InstallmentPlan[];
+  expenses: ExpenseRecord[];
+  savings: SavingsItem[];
+  liabilities: LiabilityItem[];
+  receivables: ReceivableRecord[];
+  monthlyData: MonthlyRecord[];
+  accountBalances: AccountBalancesState;
+  transactions: FinancialTransaction[];
   openingBalance: number;
   currentBalance: number;
   totalIncome: number;

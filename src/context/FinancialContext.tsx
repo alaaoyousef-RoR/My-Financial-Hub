@@ -17,7 +17,12 @@ import {
   FinancialTransaction,
   ExpenseCategory,
   PaymentMethod,
-  FrequencyType
+  FrequencyType,
+  PlatformType,
+  SavingsCategory,
+  IncomeCategory,
+  LiabilityCategory,
+  FixedObligationCategory
 } from '../types/finance';
 import { 
   INITIAL_INCOMES, 
@@ -44,7 +49,7 @@ export function sanitizeForFirestore<T>(obj: T): T {
   if (Array.isArray(obj)) {
     return obj.map(item => sanitizeForFirestore(item)) as unknown as T;
   }
-  const result: Record<string, any> = {};
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     result[key] = value === undefined ? null : sanitizeForFirestore(value);
   }
@@ -116,16 +121,16 @@ interface FinancialContextType {
   undoPayInstallment: (id: string) => void;
   toggleInstallmentStatus: (id: string) => void;
   deleteInstallment: (id: string) => void;
-  saveInstallment: (name: string, platform: any, amount: number, start: string, end: string, remainingMonths: number, category?: string) => void;
+  saveInstallment: (name: string, platform: PlatformType, amount: number, start: string, end: string, remainingMonths: number, category?: string) => void;
   updateInstallment: (updatedItem: InstallmentRecord) => void;
 
-  transferToSavings: (title: string, amount: number, category: any, notes?: string) => boolean;
+  transferToSavings: (title: string, amount: number, category: SavingsCategory, notes?: string) => boolean;
   deleteSavings: (id: string) => void;
 
   logExpense: (desc: string, amount: number, category: ExpenseCategory, method: PaymentMethod, date?: string) => boolean;
   deleteExpense: (id: string) => void;
 
-  addIncome: (title: string, amount: number, frequency: FrequencyType, category: any, isRecurring: boolean, notes?: string) => void;
+  addIncome: (title: string, amount: number, frequency: FrequencyType, category: IncomeCategory, isRecurring: boolean, notes?: string) => void;
   deleteIncome: (id: string) => void;
 
   payCarInstallment: () => void;
@@ -136,10 +141,10 @@ interface FinancialContextType {
   deleteReceivable: (id: string) => void;
   saveReceivable: (name: string, amount: number, notes?: string) => void;
 
-  saveLiability: (title: string, amount: number, dueDate: string, category: any, notes?: string) => void;
+  saveLiability: (title: string, amount: number, dueDate: string, category: LiabilityCategory, notes?: string) => void;
   deleteLiability: (id: string) => void;
 
-  saveFixedObligation: (title: string, amount: number, category: any, dueDay?: number, notes?: string) => void;
+  saveFixedObligation: (title: string, amount: number, category: FixedObligationCategory, dueDay?: number, notes?: string) => void;
   deleteFixedObligation: (id: string) => void;
 
   updateMonth: (updated: MonthlyRecord) => void;
@@ -307,7 +312,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [user]);
 
   // Persist mutations to Firestore
-  const syncToFirestore = async (customOverrides?: Partial<any>) => {
+  const syncToFirestore = async (customOverrides?: Record<string, unknown>) => {
     if (!user || isRemoteSyncRef.current) return;
     const docPath = `users/${user.uid}/data/financial_dashboard`;
     try {
@@ -538,7 +543,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const saveInstallment = (
     name: string,
-    platform: any,
+    platform: PlatformType,
     amount: number,
     start: string,
     end: string,
@@ -568,7 +573,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     showToast(`تم تحديث قسط ${updatedItem.name} بنجاح ✨`);
   };
 
-  const transferToSavings = (title: string, amount: number, category: any, notes?: string): boolean => {
+  const transferToSavings = (title: string, amount: number, category: SavingsCategory, notes?: string): boolean => {
     if (amount <= 0) return false;
 
     if (accountBalances.checkingBalance < amount) {
@@ -691,7 +696,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     title: string,
     amount: number,
     frequency: FrequencyType,
-    category: any,
+    category: IncomeCategory,
     isRecurring: boolean,
     notes?: string
   ) => {
@@ -834,7 +839,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     showToast(`تم تسجيل مستحق جديد لدى ${name}`);
   };
 
-  const saveLiability = (title: string, amount: number, dueDate: string, category: any, notes?: string) => {
+  const saveLiability = (title: string, amount: number, dueDate: string, category: LiabilityCategory, notes?: string) => {
     const newItem: LiabilityItem = {
       id: `liab-${Date.now()}`,
       title,
@@ -853,7 +858,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     showToast('تم حذف الدين / التزام');
   };
 
-  const saveFixedObligation = (title: string, amount: number, category: any, dueDay?: number, notes?: string) => {
+  const saveFixedObligation = (title: string, amount: number, category: FixedObligationCategory, dueDay?: number, notes?: string) => {
     const newItem: FixedObligation = {
       id: `fix-${Date.now()}`,
       title,

@@ -442,7 +442,7 @@ function DashboardAppContent() {
         editingInstallment={editingInstallment}
         mode={editingInstallment ? 'edit' : 'create'}
         onSave={(newItem) => {
-          saveInstallment(newItem.name, newItem.platform, newItem.amount, newItem.start, newItem.end, newItem.remainingMonths, newItem.category);
+          saveInstallment(newItem.name, newItem.platform || 'Other', newItem.amount, newItem.start, newItem.end, newItem.remainingMonths, newItem.category);
           setIsInstallmentModalOpen(false);
           setEditingInstallment(null);
         }}
@@ -465,7 +465,7 @@ function DashboardAppContent() {
       <AddFixedObligationModal
         isOpen={isFixedModalOpen}
         onClose={() => setIsFixedModalOpen(false)}
-        onSave={(title: string, amount: number, category: any, notes?: string) => {
+        onSave={(title, amount, category, notes) => {
           saveFixedObligation(title, amount, category, undefined, notes);
           setIsFixedModalOpen(false);
         }}
