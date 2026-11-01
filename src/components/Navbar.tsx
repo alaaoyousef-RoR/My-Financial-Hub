@@ -22,7 +22,8 @@ import {
   LogOut,
   Check,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface HeaderGreetingTimeProps {
@@ -122,6 +123,7 @@ interface NavbarProps {
   onOpenReceivableModal: () => void;
   onOpenIncomeModal: () => void;
   onOpenSavingsModal: () => void;
+  onOpenStatementImportModal?: () => void;
   onExportJSON?: () => void;
   onExportHTML?: () => void;
   onImport: (file: File) => void;
@@ -138,6 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenReceivableModal,
   onOpenIncomeModal,
   onOpenSavingsModal,
+  onOpenStatementImportModal,
   onImport,
   onReset,
   onResetToZero,
@@ -218,6 +221,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <PiggyBank className="w-4 h-4 text-emerald-400" />
             <span className="hidden sm:inline">+ إيداع ادخار</span>
           </button>
+
+          {onOpenStatementImportModal && (
+            <button
+              onClick={onOpenStatementImportModal}
+              className="btn btn-secondary text-xs sm:text-sm shadow-xs border-blue-500/30 text-blue-300 hover:text-white hover:border-blue-500/50"
+              title="استيراد كشف حساب بنكي (.xlsx / .csv)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-blue-400" />
+              <span className="hidden lg:inline">استيراد كشف بنكي</span>
+            </button>
+          )}
 
           <div className="h-6 w-px bg-[var(--glass-border)] mx-1 hidden sm:block"></div>
 

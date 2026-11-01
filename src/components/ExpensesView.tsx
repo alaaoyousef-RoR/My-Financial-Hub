@@ -41,7 +41,8 @@ import {
   Zap,
   TrendingDown,
   RefreshCw,
-  Scale
+  Scale,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface ExpensesViewProps {
@@ -51,6 +52,7 @@ interface ExpensesViewProps {
   onQuickAdd: (desc: string, amount: number, category: ExpenseCategory, method: PaymentMethod, date?: string) => void;
   onDeleteExpense: (id: string) => void;
   isReadOnlySimulation?: boolean;
+  onOpenStatementImportModal?: () => void;
 }
 
 interface WeeklyBucket {
@@ -72,7 +74,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   onAddClick,
   onQuickAdd,
   onDeleteExpense,
-  isReadOnlySimulation = false
+  isReadOnlySimulation = false,
+  onOpenStatementImportModal
 }) => {
   const { setExpenses, showToast } = useFinancialState();
   const monthContext = useMonthContext();
@@ -437,13 +440,27 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
         <div className="flex items-center gap-2">
           {!isReadOnlySimulation ? (
-            <button
-              onClick={onAddClick}
-              className="btn btn-secondary text-xs sm:text-sm py-2 px-3.5 flex items-center gap-1.5 shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ صرف مفصل</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenStatementImportModal && (
+                <button
+                  type="button"
+                  onClick={onOpenStatementImportModal}
+                  className="btn btn-secondary text-xs sm:text-sm py-2 px-3.5 flex items-center gap-1.5 shadow-sm cursor-pointer border-blue-500/30 text-blue-300 hover:text-white hover:border-blue-500/50"
+                  title="استيراد كشف حساب بنكي (.xlsx / .csv)"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-blue-400" />
+                  <span>استيراد كشف بنكي</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onAddClick}
+                className="btn btn-secondary text-xs sm:text-sm py-2 px-3.5 flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ صرف مفصل</span>
+              </button>
+            </div>
           ) : (
             <span className="text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold">
               وضع المحاكاة التقديرية (للقراءة فقط) 🔒

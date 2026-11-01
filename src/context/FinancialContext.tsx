@@ -108,6 +108,8 @@ interface FinancialContextType {
   setLiabilities: React.Dispatch<React.SetStateAction<LiabilityItem[]>>;
   setReceivables: React.Dispatch<React.SetStateAction<ReceivableRecord[]>>;
   setMonthlyData: React.Dispatch<React.SetStateAction<MonthlyRecord[]>>;
+  setAccountBalances: React.Dispatch<React.SetStateAction<AccountBalancesState>>;
+  setTransactions: React.Dispatch<React.SetStateAction<FinancialTransaction[]>>;
 
   // Unified Transactional Dispatch Actions
   payInstallment: (id: string) => boolean;
@@ -255,9 +257,14 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
             setSaveStatus('saved');
             console.log('[Persistence] Synced remote document from Cloud Firestore ✓');
           } else {
-            // First time provisioning for new user: initialize remote document
+            // First time provisioning for new user: initialize remote document with zeroed metrics
             const currentLocalDoc = {
               userId: user.uid,
+              openingBalance: accountBalances.checkingBalance || 0,
+              currentBalance: accountBalances.checkingBalance || 0,
+              totalIncome: 0,
+              totalExpenses: 0,
+              isSetupComplete: false,
               incomes,
               carPlan,
               fixedObligations,
@@ -273,7 +280,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
             };
             await setDoc(docRef, sanitizeForFirestore(currentLocalDoc));
             setSaveStatus('saved');
-            console.log('[Persistence] Initialized new remote Firestore document');
+            console.log('[Persistence] Initialized new remote Firestore document with baseline metrics');
           }
         } catch (err) {
           setSaveStatus('error');
@@ -1019,6 +1026,8 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         setLiabilities,
         setReceivables,
         setMonthlyData,
+        setAccountBalances,
+        setTransactions,
 
         payInstallment,
         undoPayInstallment,

@@ -43,6 +43,9 @@ import {
 import { ExportCodeModal } from './components/ExportCodeModal';
 import { ResetConfirmationModal } from './components/ResetConfirmationModal';
 import { InstallmentModal } from './components/InstallmentModal';
+import { StatementImportModal } from './components/modals/StatementImportModal';
+import { SetStartingBalanceModal } from './components/onboarding/SetStartingBalanceModal';
+import { EmptyDashboardState } from './components/dashboard/EmptyDashboardState';
 import { InstallmentRecord } from './types/finance';
 
 function DashboardAppContent() {
@@ -67,6 +70,8 @@ function DashboardAppContent() {
   const [isLiabilityModalOpen, setIsLiabilityModalOpen] = useState(false);
   const [isExportCodeModalOpen, setIsExportCodeModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isStatementImportModalOpen, setIsStatementImportModalOpen] = useState(false);
+  const [isStartingBalanceModalOpen, setIsStartingBalanceModalOpen] = useState(false);
 
   if (authLoading || financial.dataLoading) {
     return (
@@ -194,6 +199,7 @@ function DashboardAppContent() {
         onOpenReceivableModal={() => setIsReceivableModalOpen(true)}
         onOpenIncomeModal={() => setIsIncomeModalOpen(true)}
         onOpenSavingsModal={() => setIsSavingsModalOpen(true)}
+        onOpenStatementImportModal={() => setIsStatementImportModalOpen(true)}
         onExportJSON={exportBackupJSON}
         onExportHTML={() => {
           setIsExportCodeModalOpen(true);
@@ -215,6 +221,16 @@ function DashboardAppContent() {
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             
+            {/* Zero-State Welcoming Banner for Clean Slate / First-Time Users */}
+            {expenses.length === 0 && incomes.length === 0 && (
+              <EmptyDashboardState
+                onOpenExpenseModal={() => setIsExpenseModalOpen(true)}
+                onOpenIncomeModal={() => setIsIncomeModalOpen(true)}
+                onOpenStatementImportModal={() => setIsStatementImportModalOpen(true)}
+                onOpenStartingBalanceModal={() => setIsStartingBalanceModalOpen(true)}
+              />
+            )}
+
             {/* Liquid Accounts Tracker: Balanced 3-Column Grid */}
             <AccountBalances
               checkingBalance={monthContext.isReadOnlySimulation ? monthContext.activeMonthCheckingBalance : accountBalances.checkingBalance}
@@ -364,6 +380,7 @@ function DashboardAppContent() {
               onQuickAdd={(desc, amt, cat, meth, dt) => logExpense(desc, amt, cat, meth, dt)}
               onDeleteExpense={deleteExpense}
               isReadOnlySimulation={monthContext.isReadOnlySimulation}
+              onOpenStatementImportModal={() => setIsStatementImportModalOpen(true)}
             />
           </section>
         )}
@@ -502,6 +519,18 @@ function DashboardAppContent() {
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
         onConfirm={resetAllData}
+      />
+
+      {/* Bank Statement Ingestion Modal (.xlsx / .csv) */}
+      <StatementImportModal
+        isOpen={isStatementImportModalOpen}
+        onClose={() => setIsStatementImportModalOpen(false)}
+      />
+
+      {/* Starting Balance Onboarding Modal */}
+      <SetStartingBalanceModal
+        isOpen={isStartingBalanceModalOpen}
+        onClose={() => setIsStartingBalanceModalOpen(false)}
       />
 
       {/* Toast Feedback */}
