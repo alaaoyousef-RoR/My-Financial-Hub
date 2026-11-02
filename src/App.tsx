@@ -46,7 +46,7 @@ import { InstallmentModal } from './components/InstallmentModal';
 import { StatementImportModal } from './components/modals/StatementImportModal';
 import { SetStartingBalanceModal } from './components/onboarding/SetStartingBalanceModal';
 import { EmptyDashboardState } from './components/dashboard/EmptyDashboardState';
-import { InstallmentRecord } from './types/finance';
+import { InstallmentRecord, SettlementMethod } from './types/finance';
 
 function DashboardAppContent() {
   const { user, loading: authLoading } = useAuth();
@@ -150,22 +150,22 @@ function DashboardAppContent() {
     showToast
   } = financial;
 
-  // Handle Pay Installment with Month Context Guard
-  const handlePayInstallmentSafely = (id: string) => {
+  // Handle Pay Installment with Month Context Guard & Settlement Method
+  const handlePayInstallmentSafely = (id: string, method?: SettlementMethod) => {
     if (monthContext.isReadOnlySimulation) {
       showToast(`⚠️ أنت في وضع المحاكاة لشهر مستقبلي (${monthContext.selectedMonth.name}). لإجراء سداد بنكي فعلي، انتقل إلى الشهر الحالي المباشر.`);
       return;
     }
-    payInstallment(id);
+    payInstallment(id, method);
   };
 
-  // Handle Pay Car Installment with Month Context Guard
-  const handlePayCarSafely = () => {
+  // Handle Pay Car Installment with Month Context Guard & Settlement Method
+  const handlePayCarSafely = (method?: SettlementMethod) => {
     if (monthContext.isReadOnlySimulation) {
       showToast(`⚠️ أنت في وضع المحاكاة لشهر مستقبلي. سداد الأقساط متاح في الشهر الحالي المباشر فقط.`);
       return;
     }
-    payCarInstallment();
+    payCarInstallment(method);
   };
 
   // Current Month Record for Aside and KPIs (strictly defaults to 0)
@@ -322,6 +322,7 @@ function DashboardAppContent() {
                 <WorkstationSidebar
                   currentMonthRecord={currentMonthRecord}
                   carPlan={carPlan}
+                  checkingBalance={accountBalances.checkingBalance}
                   onPayCarInstallment={handlePayCarSafely}
                   isReadOnlySimulation={monthContext.isReadOnlySimulation}
                 />

@@ -39,7 +39,12 @@ export type {
   ProjectionModel,
   FinancialDataExportEnvelope,
   MonthItem,
-  MonthContextState
+  MonthContextState,
+  SettlementMethod,
+  SimulatedInstallmentItem,
+  BNPLMonthlySimulation,
+  AllowanceHealthStatus,
+  DynamicAllowanceResult
 } from './types';
 
 export type { MonthlyRecord as CanonicalMonthlyRecord } from './types';

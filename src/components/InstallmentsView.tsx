@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { InstallmentRecord } from '../types/finance';
+import { InstallmentRecord, SettlementMethod } from '../types/finance';
 import { formatCurrency, triggerCelebration } from '../utils/formatters';
+import { useMonthContext } from '../context/MonthContext';
+import { BNPLOverview } from './dashboard/BNPLOverview';
 import { 
   Plus, 
   Trash2, 
@@ -13,7 +15,11 @@ import {
   AlertCircle,
   ShoppingBag,
   CreditCard,
-  Edit3
+  Edit3,
+  ExternalLink,
+  Zap,
+  ChevronDown,
+  Calendar
 } from 'lucide-react';
 
 interface InstallmentsViewProps {
@@ -22,7 +28,7 @@ interface InstallmentsViewProps {
   onEditInstallment?: (item: InstallmentRecord) => void;
   onDeleteInstallment: (id: string) => void;
   onToggleStatus: (id: string) => void;
-  onPayMonth?: (id: string) => void;
+  onPayMonth?: (id: string, method?: SettlementMethod) => void;
   onUndoPayMonth?: (id: string) => void;
   isReadOnlySimulation?: boolean;
 }
@@ -37,9 +43,12 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
   onUndoPayMonth,
   isReadOnlySimulation = false
 }) => {
+  const monthContext = useMonthContext();
+  const [viewMode, setViewMode] = useState<'schedule' | 'contracts'>('schedule');
   const [platformFilter, setPlatformFilter] = useState<'all' | 'Tamara' | 'Tabby'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('active');
   const [searchQuery, setSearchQuery] = useState('');
+  const [payingInstallmentId, setPayingInstallmentId] = useState<string | null>(null);
 
   // Filtering logic
   const filtered = installments.filter((item) => {
@@ -82,39 +91,85 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-[var(--ink-muted)] mt-0.5">
-            متابعة ذكية للأقساط المتبقية وسداد قسط الشهر الحالي بنقرة واحدة وتحديث التدفق المالي فوراً
+            محاكاة متعددة الأشهر لسداد أقساط تمارا وتابي مع خيارات السداد المباشر من الجاري، الخارجي، أو المسبق
           </p>
         </div>
 
-        {!isReadOnlySimulation ? (
-          <button
-            onClick={onAddClick}
-            className="btn btn-secondary text-xs sm:text-sm py-2 px-4 shadow-sm flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>إضافة قسط جديد</span>
-          </button>
-        ) : (
-          <span className="text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold">
-            وضع المحاكاة التقديرية (للقراءة فقط) 🔒
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Subview Mode Toggle */}
+          <div className="flex p-1 rounded-xl bg-white/5 border border-white/10 text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('schedule')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                viewMode === 'schedule'
+                  ? 'bg-rose-500 text-white shadow-sm'
+                  : 'text-[var(--ink-muted)] hover:text-white'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>محاكاة الأشهر</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('contracts')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                viewMode === 'contracts'
+                  ? 'bg-rose-500 text-white shadow-sm'
+                  : 'text-[var(--ink-muted)] hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>سجل العقود ({installments.length})</span>
+            </button>
+          </div>
+
+          {!isReadOnlySimulation ? (
+            <button
+              onClick={onAddClick}
+              className="btn btn-secondary text-xs sm:text-sm py-2 px-3 shadow-sm flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة قسط</span>
+            </button>
+          ) : (
+            <span className="text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold">
+              وضع المحاكاة 🔒
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* 4 Dynamic Summary Indicators */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Total Monthly BNPL Commitments */}
-        <div className="glass-panel p-4 flex items-center justify-between border-[rgba(255,77,77,0.35)]! hover:border-[var(--danger)] transition">
-          <div>
-            <span className="label-mono font-bold text-rose-400">إجمالي أقساط هذا الشهر</span>
-            <p className="text-xl font-bold font-mono text-[var(--danger)] num-ltr mt-1">
-              {formatCurrency(totalMonthlyCommitment)} <small className="text-xs text-[var(--ink-muted)] font-sans">ر.س</small>
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-400 flex items-center justify-center">
-            <Layers className="w-5 h-5" />
-          </div>
-        </div>
+      {/* VIEW MODE 1: Interactive Multi-Month Simulation */}
+      {viewMode === 'schedule' && (
+        <BNPLOverview
+          simulation={monthContext.bnplSimulation}
+          isCurrentMonth={!monthContext.isReadOnlySimulation}
+          onPayInstallment={(id, method) => {
+            if (onPayMonth) onPayMonth(id, method);
+          }}
+          onUndoPayInstallment={onUndoPayMonth}
+          isReadOnlySimulation={isReadOnlySimulation}
+        />
+      )}
+
+      {/* VIEW MODE 2: Contracts Registry & Detailed Management */}
+      {viewMode === 'contracts' && (
+        <div className="space-y-6">
+          {/* 4 Dynamic Summary Indicators */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Total Monthly BNPL Commitments */}
+            <div className="glass-panel p-4 flex items-center justify-between border-[rgba(255,77,77,0.35)]! hover:border-[var(--danger)] transition">
+              <div>
+                <span className="label-mono font-bold text-rose-400">إجمالي أقساط هذا الشهر</span>
+                <p className="text-xl font-bold font-mono text-[var(--danger)] num-ltr mt-1">
+                  {formatCurrency(totalMonthlyCommitment)} <small className="text-xs text-[var(--ink-muted)] font-sans">ر.س</small>
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-400 flex items-center justify-center">
+                <Layers className="w-5 h-5" />
+              </div>
+            </div>
 
         {/* Tamara Monthly Total */}
         <div className="glass-panel border-rose-500/30 p-4 flex items-center justify-between">
@@ -440,31 +495,101 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
               </div>
 
               {/* Bottom Interactive Action Row */}
-              <div className="pt-3.5 mt-3 border-t border-[var(--glass-border)] flex items-center justify-between gap-2">
+              <div className="pt-3.5 mt-3 border-t border-[var(--glass-border)]">
                 {!isReadOnlySimulation ? (
                   !isDone ? (
-                    <>
-                      <button
-                        onClick={() => {
-                          if (onPayMonth) onPayMonth(item.id);
-                        }}
-                        className="btn btn-primary text-xs py-1.5 px-3 flex-1 flex items-center justify-center gap-1.5 shadow-sm font-bold"
-                        title="سداد قسط هذا الشهر (خصم 1 شهر من المتبقي فوراً)"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>سداد قسط هذا الشهر</span>
-                      </button>
-
-                      {paidMonths > 0 && onUndoPayMonth && (
+                    payingInstallmentId !== item.id ? (
+                      <div className="flex items-center justify-between gap-2">
                         <button
-                          onClick={() => onUndoPayMonth(item.id)}
-                          className="cursor-pointer p-1.5 text-[var(--ink-muted)] hover:text-white rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10 transition"
-                          title="تراجع عن سداد القسط الأخير"
+                          type="button"
+                          onClick={() => {
+                            if (onPayMonth) onPayMonth(item.id, 'CHECKING_ACCOUNT');
+                          }}
+                          className="btn btn-primary text-xs py-1.5 px-3 flex-1 flex items-center justify-center gap-1.5 shadow-sm font-bold"
+                          title="سداد قسط هذا الشهر مع الخصم المباشر من الحساب الجاري"
                         >
-                          <RotateCcw className="w-3.5 h-3.5" />
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>سداد من الجاري</span>
                         </button>
-                      )}
-                    </>
+
+                        <button
+                          type="button"
+                          onClick={() => setPayingInstallmentId(item.id)}
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--ink-muted)] hover:text-white transition"
+                          title="خيارات تسوية أخرى (خارجي أو سداد مسبق)"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+
+                        {paidMonths > 0 && onUndoPayMonth && (
+                          <button
+                            type="button"
+                            onClick={() => onUndoPayMonth(item.id)}
+                            className="cursor-pointer p-1.5 text-[var(--ink-muted)] hover:text-white rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10 transition"
+                            title="تراجع عن سداد القسط الأخير"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 bg-slate-900/90 p-2.5 rounded-xl border border-white/10 text-xs animate-fadeIn">
+                        <p className="text-[10px] font-bold text-[var(--ink)] mb-1">اختر طريقة تسوية القسط:</p>
+                        
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onPayMonth) onPayMonth(item.id, 'CHECKING_ACCOUNT');
+                            setPayingInstallmentId(null);
+                          }}
+                          className="w-full text-right p-1.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-[11px] flex items-center justify-between transition"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <CreditCard className="w-3 h-3" />
+                            <span>الحساب الجاري</span>
+                          </span>
+                          <span className="text-[9px] text-emerald-400">يخصم من الرصيد</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onPayMonth) onPayMonth(item.id, 'EXTERNAL');
+                            setPayingInstallmentId(null);
+                          }}
+                          className="w-full text-right p-1.5 rounded bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-[11px] flex items-center justify-between transition"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <ExternalLink className="w-3 h-3" />
+                            <span>سداد خارجي</span>
+                          </span>
+                          <span className="text-[9px] text-blue-400">بدون خصم الجاري</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onPayMonth) onPayMonth(item.id, 'PREPAID');
+                            setPayingInstallmentId(null);
+                          }}
+                          className="w-full text-right p-1.5 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-[11px] flex items-center justify-between transition"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Zap className="w-3 h-3" />
+                            <span>سداد مسبق</span>
+                          </span>
+                          <span className="text-[9px] text-purple-400">مدفوع مقدماً</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPayingInstallmentId(null)}
+                          className="w-full text-center text-[10px] text-[var(--ink-muted)] hover:text-white pt-1"
+                        >
+                          إلغاء
+                        </button>
+                      </div>
+                    )
                   ) : (
                     <div className="w-full flex items-center justify-between">
                       <span className="text-xs text-emerald-400 font-bold">صفر التزامات 🎉</span>
@@ -503,6 +628,10 @@ export const InstallmentsView: React.FC<InstallmentsViewProps> = ({
         </div>
       )}
 
+        </div>
+      )}
+
     </div>
   );
 };
+

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useMemo, ReactNode } from 'react';
-import { MonthItem, MonthContextState } from '../types/finance';
+import { MonthItem, MonthContextState, BNPLMonthlySimulation } from '../types/finance';
 import { useFinancialState } from './FinancialContext';
 import { calculateProjectedMonth } from '../utils/financialMath';
+import { simulateBNPLSchedule } from '../utils/financeCalculators';
 import { 
   getCurrentYearMonth, 
   generateTimelineMonths, 
@@ -21,6 +22,7 @@ interface ExtendedMonthContextType extends MonthContextState {
   activeMonthSavingsBalance: number;
   isZeroDebtMonth: boolean;
   activeInstallmentsCount: number;
+  bnplSimulation: BNPLMonthlySimulation;
 }
 
 const MonthContext = createContext<ExtendedMonthContextType | undefined>(undefined);
@@ -111,6 +113,11 @@ export const MonthProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     projectionOffset
   ]);
 
+  // Multi-month simulated BNPL schedule for selected month
+  const bnplSimulation = useMemo(() => {
+    return simulateBNPLSchedule(financial.installments, selectedYearMonth, currentSystemYM);
+  }, [financial.installments, selectedYearMonth, currentSystemYM]);
+
   return (
     <MonthContext.Provider
       value={{
@@ -136,7 +143,8 @@ export const MonthProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         activeMonthCheckingBalance: projection.projectedCheckingBalance,
         activeMonthSavingsBalance: projection.projectedSavingsBalance,
         isZeroDebtMonth: projection.isZeroDebtMonth,
-        activeInstallmentsCount: projection.activeInstallmentsCount
+        activeInstallmentsCount: projection.activeInstallmentsCount,
+        bnplSimulation
       }}
     >
       {children}

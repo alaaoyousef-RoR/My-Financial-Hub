@@ -22,7 +22,9 @@ import {
   SavingsCategory,
   IncomeCategory,
   LiabilityCategory,
-  FixedObligationCategory
+  FixedObligationCategory,
+  SettlementMethod,
+  DynamicAllowanceResult
 } from '../types/finance';
 import { 
   INITIAL_INCOMES, 
@@ -67,9 +69,16 @@ import {
   calculateProjectedMonth
 } from '../utils/financialMath';
 import {
+  deductInstallmentFromBalance,
+  calculateDynamicAllowance,
+  calculateRemainingFixedLiabilities,
+  simulateBNPLSchedule
+} from '../utils/financeCalculators';
+import {
   getCurrentYearMonth,
   isDateInMonth,
-  generateTimelineMonths
+  generateTimelineMonths,
+  getRemainingDaysInMonth
 } from '../utils/dateFilters';
 
 interface FinancialContextType {
@@ -102,6 +111,7 @@ interface FinancialContextType {
   unpaidCommitments: number;
   totalNetLiquidity: number;
   realAvailableLiquidity: number;
+  dynamicAllowance: DynamicAllowanceResult;
 
   // Direct State Setters
   setIncomes: React.Dispatch<React.SetStateAction<IncomeItem[]>>;
@@ -117,7 +127,8 @@ interface FinancialContextType {
   setTransactions: React.Dispatch<React.SetStateAction<FinancialTransaction[]>>;
 
   // Unified Transactional Dispatch Actions
-  payInstallment: (id: string) => boolean;
+  payInstallment: (id: string, paymentMethod?: SettlementMethod) => boolean;
+  markInstallmentPrepaid: (id: string) => boolean;
   undoPayInstallment: (id: string) => void;
   toggleInstallmentStatus: (id: string) => void;
   deleteInstallment: (id: string) => void;
@@ -133,7 +144,8 @@ interface FinancialContextType {
   addIncome: (title: string, amount: number, frequency: FrequencyType, category: IncomeCategory, isRecurring: boolean, notes?: string) => void;
   deleteIncome: (id: string) => void;
 
-  payCarInstallment: () => void;
+  payCarInstallment: (paymentMethod?: SettlementMethod) => boolean;
+  markCarInstallmentPrepaid: () => boolean;
   updateCarPlan: (plan: CarPlan) => void;
 
   updateAccountBalances: (checking: number, savings: number) => void;
@@ -432,27 +444,48 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     return calculateLiquidity(accountBalances.checkingBalance, unpaidCommitments);
   }, [accountBalances.checkingBalance, unpaidCommitments]);
 
+  // Dynamic Discretionary Allowance calculated from checking balance minus pending obligations
+  const dynamicAllowance = useMemo(() => {
+    const currentYM = getCurrentYearMonth();
+    const remainingDays = getRemainingDaysInMonth(currentYM);
+    return calculateDynamicAllowance(accountBalances.checkingBalance, unpaidCommitments, remainingDays);
+  }, [accountBalances.checkingBalance, unpaidCommitments]);
+
   // Actions
-  const payInstallment = (id: string): boolean => {
+  const payInstallment = (id: string, paymentMethod: SettlementMethod = 'CHECKING_ACCOUNT'): boolean => {
     const target = installments.find(i => i.id === id);
     if (!target) return false;
 
-    if (accountBalances.checkingBalance < target.amount) {
+    // Pure deduction from checking balance when payment method is CHECKING_ACCOUNT
+    const deduction = deductInstallmentFromBalance(
+      accountBalances.checkingBalance,
+      target.amount,
+      paymentMethod
+    );
+
+    if (deduction.wasOverdraft) {
       showToast(`⚠️ تنبيه: رصيدك الجاري (${formatCurrency(accountBalances.checkingBalance)} ر.س) أقل من قيمة القسط (${formatCurrency(target.amount)} ر.س)`);
     }
 
-    const newChecking = Math.max(Math.round((accountBalances.checkingBalance - target.amount) * 100) / 100, 0);
+    if (deduction.isDeductedFromChecking) {
+      setAccountBalances(prev => ({
+        ...prev,
+        checkingBalance: deduction.newBalance,
+        lastUpdated: new Date().toISOString()
+      }));
+    }
+
     const total = target.totalMonths || Math.max(target.remainingMonths + (target.paidMonths || 0), 4);
     const currentPaid = target.paidMonths ?? Math.max(total - target.remainingMonths, 0);
     const newRemaining = Math.max(target.remainingMonths - 1, 0);
     const newPaid = currentPaid + 1;
     const isCompleted = newRemaining === 0;
 
-    setAccountBalances(prev => ({
-      ...prev,
-      checkingBalance: newChecking,
-      lastUpdated: new Date().toISOString()
-    }));
+    const methodLabel = paymentMethod === 'CHECKING_ACCOUNT'
+      ? 'الحساب الجاري'
+      : paymentMethod === 'PREPAID'
+        ? 'سداد مسبق'
+        : 'حساب خارجي';
 
     setInstallments(prev => prev.map(item => {
       if (item.id === id) {
@@ -463,7 +496,12 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           remainingMonths: newRemaining,
           isPaidThisMonth: true,
           status: isCompleted ? 'completed' : 'active',
-          remainingNote: isCompleted ? 'مكتمل بالكامل 🎉' : `${newRemaining} أشهر متبقية`
+          remainingNote: isCompleted ? 'مكتمل بالكامل 🎉' : `${newRemaining} أشهر متبقية`,
+          paymentMethod,
+          lastPaymentMethod: paymentMethod,
+          isPrepaid: paymentMethod === 'PREPAID',
+          paidExternally: paymentMethod === 'EXTERNAL',
+          settlementDate: new Date().toISOString().split('T')[0]
         };
       }
       return item;
@@ -472,35 +510,46 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     const newTx: FinancialTransaction = {
       id: `tx-bnpl-${Date.now()}`,
       type: 'bnpl_installment',
-      title: `سداد قسط ${target.name} (${target.platform})`,
+      title: `سداد قسط ${target.name} (${target.platform}) - ${methodLabel}`,
       amount: target.amount,
       date: new Date().toISOString().split('T')[0],
-      sourceAccount: 'checking',
+      sourceAccount: deduction.isDeductedFromChecking ? 'checking' : 'external',
       destinationAccount: 'external',
       relatedId: target.id,
-      notes: isCompleted ? 'اكتملت خطة الأقساط بالكامل' : `متبقي ${newRemaining} أشهر`
+      notes: `${deduction.transactionNote} | ${isCompleted ? 'اكتملت خطة الأقساط بالكامل' : `متبقي ${newRemaining} أشهر`}`
     };
     setTransactions(prev => [newTx, ...prev]);
 
     triggerCelebration();
-    showToast(`تم سداد قسط ${target.name} (${formatCurrency(target.amount)} ر.س) وخُصم من الحساب الجاري بنجاح! 🎉`);
+    const toastText = deduction.isDeductedFromChecking
+      ? `تم سداد قسط ${target.name} (${formatCurrency(target.amount)} ر.س) وخُصم من الحساب الجاري بنجاح! 🎉`
+      : `تم تسجيل سداد قسط ${target.name} كـ (${methodLabel}) دون خصم من الحساب الجاري! 🎉`;
+    showToast(toastText);
     return true;
+  };
+
+  const markInstallmentPrepaid = (id: string): boolean => {
+    return payInstallment(id, 'PREPAID');
   };
 
   const undoPayInstallment = (id: string) => {
     const target = installments.find(i => i.id === id);
     if (!target) return;
 
-    const restoredChecking = Math.round((accountBalances.checkingBalance + target.amount) * 100) / 100;
+    // Only restore checking balance if payment was actually debited from checking
+    const wasDeductedFromChecking = target.lastPaymentMethod === 'CHECKING_ACCOUNT' || !target.lastPaymentMethod;
+    if (wasDeductedFromChecking) {
+      const restoredChecking = Math.round((accountBalances.checkingBalance + target.amount) * 100) / 100;
+      setAccountBalances(prev => ({
+        ...prev,
+        checkingBalance: restoredChecking,
+        lastUpdated: new Date().toISOString()
+      }));
+    }
+
     const total = target.totalMonths || 4;
     const currentPaid = Math.max((target.paidMonths ?? (total - target.remainingMonths)) - 1, 0);
     const newRemaining = target.remainingMonths + 1;
-
-    setAccountBalances(prev => ({
-      ...prev,
-      checkingBalance: restoredChecking,
-      lastUpdated: new Date().toISOString()
-    }));
 
     setInstallments(prev => prev.map(item => {
       if (item.id === id) {
@@ -511,14 +560,20 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
           remainingMonths: newRemaining,
           isPaidThisMonth: false,
           status: 'active',
-          remainingNote: `${newRemaining} أشهر متبقية`
+          remainingNote: `${newRemaining} أشهر متبقية`,
+          lastPaymentMethod: undefined,
+          isPrepaid: false,
+          paidExternally: false,
+          settlementDate: undefined
         };
       }
       return item;
     }));
 
     setTransactions(prev => prev.filter(t => !(t.relatedId === id && t.type === 'bnpl_installment')));
-    showToast(`تم التراجع عن سداد القسط واستعادة ${formatCurrency(target.amount)} ر.س للحساب الجاري`);
+    showToast(wasDeductedFromChecking
+      ? `تم التراجع عن سداد القسط واستعادة ${formatCurrency(target.amount)} ر.س للحساب الجاري`
+      : `تم التراجع عن سداد القسط (لم يتم تعديل الرصيد الجاري لأنه لم يُخصم منه)`);
   };
 
   const toggleInstallmentStatus = (id: string) => {
@@ -749,41 +804,69 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     showToast('تم حذف بند الدخل');
   };
 
-  const payCarInstallment = () => {
-    if (carPlan.paidInstallments >= carPlan.totalInstallments) return;
+  const payCarInstallment = (paymentMethod: SettlementMethod = 'CHECKING_ACCOUNT'): boolean => {
+    if (carPlan.paidInstallments >= carPlan.totalInstallments) return false;
 
-    if (accountBalances.checkingBalance < carPlan.monthlyInstallment) {
+    // Pure deduction logic
+    const deduction = deductInstallmentFromBalance(
+      accountBalances.checkingBalance,
+      carPlan.monthlyInstallment,
+      paymentMethod
+    );
+
+    if (deduction.wasOverdraft) {
       showToast(`⚠️ تنبيه: رصيدك الجاري (${formatCurrency(accountBalances.checkingBalance)} ر.س) أقل من قسط السيارة (${formatCurrency(carPlan.monthlyInstallment)} ر.س)`);
     }
 
-    const newChecking = Math.max(Math.round((accountBalances.checkingBalance - carPlan.monthlyInstallment) * 100) / 100, 0);
+    if (deduction.isDeductedFromChecking) {
+      setAccountBalances(prev => ({
+        ...prev,
+        checkingBalance: deduction.newBalance,
+        lastUpdated: new Date().toISOString()
+      }));
+    }
+
     const updatedPlan: CarPlan = { 
       ...carPlan, 
       paidInstallments: carPlan.paidInstallments + 1,
-      isPaidThisMonth: true 
+      isPaidThisMonth: true,
+      paymentMethod,
+      lastPaymentMethod: paymentMethod,
+      isPrepaid: paymentMethod === 'PREPAID',
+      paidExternally: paymentMethod === 'EXTERNAL',
+      lastSettlementDate: new Date().toISOString().split('T')[0]
     };
 
-    setAccountBalances(prev => ({
-      ...prev,
-      checkingBalance: newChecking,
-      lastUpdated: new Date().toISOString()
-    }));
-
     setCarPlan(updatedPlan);
+
+    const methodLabel = paymentMethod === 'CHECKING_ACCOUNT'
+      ? 'الحساب الجاري'
+      : paymentMethod === 'PREPAID'
+        ? 'سداد مسبق'
+        : 'حساب خارجي';
 
     const newTx: FinancialTransaction = {
       id: `tx-car-${Date.now()}`,
       type: 'car_installment',
-      title: `سداد قسط السيارة (${updatedPlan.paidInstallments}/${updatedPlan.totalInstallments})`,
+      title: `سداد قسط السيارة (${updatedPlan.paidInstallments}/${updatedPlan.totalInstallments}) - ${methodLabel}`,
       amount: carPlan.monthlyInstallment,
       date: new Date().toISOString().split('T')[0],
-      sourceAccount: 'checking',
-      destinationAccount: 'external'
+      sourceAccount: deduction.isDeductedFromChecking ? 'checking' : 'external',
+      destinationAccount: 'external',
+      notes: deduction.transactionNote
     };
     setTransactions(prev => [newTx, ...prev]);
 
     triggerCelebration();
-    showToast(`تم سداد قسط السيارة بنجاح (${updatedPlan.paidInstallments}/${updatedPlan.totalInstallments}) وخصم ${formatCurrency(carPlan.monthlyInstallment)} ر.س من الرصيد الجاري! 🚗`);
+    const toastText = deduction.isDeductedFromChecking
+      ? `تم سداد قسط السيارة بنجاح (${updatedPlan.paidInstallments}/${updatedPlan.totalInstallments}) وخُصم ${formatCurrency(carPlan.monthlyInstallment)} ر.س من الرصيد الجاري! 🚗`
+      : `تم تسجيل سداد قسط السيارة كـ (${methodLabel}) (${updatedPlan.paidInstallments}/${updatedPlan.totalInstallments}) دون خصم من الرصيد الجاري! 🚗`;
+    showToast(toastText);
+    return true;
+  };
+
+  const markCarInstallmentPrepaid = (): boolean => {
+    return payCarInstallment('PREPAID');
   };
 
   const updateCarPlan = (plan: CarPlan) => {
@@ -1021,6 +1104,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         unpaidCommitments,
         totalNetLiquidity,
         realAvailableLiquidity,
+        dynamicAllowance,
 
         setIncomes,
         setFixedObligations,
@@ -1035,6 +1119,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         setTransactions,
 
         payInstallment,
+        markInstallmentPrepaid,
         undoPayInstallment,
         toggleInstallmentStatus,
         deleteInstallment,
@@ -1051,6 +1136,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         deleteIncome,
 
         payCarInstallment,
+        markCarInstallmentPrepaid,
         updateCarPlan,
 
         updateAccountBalances,

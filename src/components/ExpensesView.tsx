@@ -16,6 +16,7 @@ import {
   WeeklyBucketInput, 
   WeeklyAllocationResult 
 } from '../utils/financialMath';
+import { AllowancePlanner } from './dashboard/AllowancePlanner';
 import { 
   Plus, 
   Trash2, 
@@ -77,7 +78,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   isReadOnlySimulation = false,
   onOpenStatementImportModal
 }) => {
-  const { setExpenses, showToast } = useFinancialState();
+  const financial = useFinancialState();
+  const { setExpenses, showToast, dynamicAllowance } = financial;
   const monthContext = useMonthContext();
 
   const selectedYearMonth = monthContext?.selectedYearMonth || getCurrentYearMonth();
@@ -468,6 +470,12 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Dynamic Allowance Planner: Live Derived Discretionary Pool */}
+      <AllowancePlanner 
+        allowance={dynamicAllowance} 
+        isReadOnlySimulation={isReadOnlySimulation} 
+      />
 
       {/* 2. Hero Metric Banner (Integrated Smart Summary) */}
       <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-slate-800 bg-gradient-to-br from-[#0c162c] via-[#091122] to-[#070c18] shadow-2xl relative overflow-hidden space-y-6">

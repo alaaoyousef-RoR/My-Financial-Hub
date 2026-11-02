@@ -513,3 +513,12 @@ export function computeWeeklyAllocations({
     activeSummary
   };
 }
+
+// Re-export pure domain calculators
+export {
+  deductInstallmentFromBalance,
+  calculateDynamicAllowance,
+  calculateRemainingFixedLiabilities,
+  simulateBNPLSchedule
+} from './financeCalculators';
+export type { BalanceDeductionResult } from './financeCalculators';

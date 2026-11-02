@@ -101,6 +101,9 @@ export type PaymentMethod =
 
 export type AccountType = 'checking' | 'savings' | 'external' | 'CHECKING' | 'SAVINGS' | 'EXTERNAL';
 
+// Settlement execution method for installments and loans
+export type SettlementMethod = 'CHECKING_ACCOUNT' | 'EXTERNAL' | 'PREPAID';
+
 // ==========================================
 // 2. Discrete Item Definitions
 // ==========================================
@@ -147,6 +150,13 @@ export interface InstallmentPlan {
   remainingNote?: string;
   status?: 'active' | 'completed';
   category?: string;
+
+  // Settlement & Prepayment attributes
+  paymentMethod?: SettlementMethod;
+  lastPaymentMethod?: SettlementMethod;
+  isPrepaid?: boolean;
+  paidExternally?: boolean;
+  settlementDate?: string;
 }
 
 export type InstallmentRecord = InstallmentPlan;
@@ -164,6 +174,60 @@ export interface CarPlan {
   balloonPayment: number;
   isPaidThisMonth?: boolean;
   notes?: string;
+
+  // Settlement & Prepayment tracking
+  paymentMethod?: SettlementMethod;
+  lastPaymentMethod?: SettlementMethod;
+  isPrepaid?: boolean;
+  paidExternally?: boolean;
+  lastSettlementDate?: string;
+}
+
+// Multi-month simulated installment contract projection
+export interface SimulatedInstallmentItem {
+  id: string;
+  name: string;
+  platform: PlatformType;
+  monthlyAmount: number;
+  totalAmount: number;
+  tenureMonths: number;
+  paidMonthsAtTarget: number;
+  remainingMonthsAtTarget: number;
+  isActiveInTargetMonth: boolean;
+  projectedDueInTargetMonth: number;
+  remainingDebtAtTarget: number;
+  startDate: string;
+  endDate: string;
+  isSettled: boolean;
+  isPrepaid?: boolean;
+  paidExternally?: boolean;
+  lastPaymentMethod?: SettlementMethod;
+}
+
+export interface BNPLMonthlySimulation {
+  targetMonthYear: string;
+  baseMonthYear: string;
+  monthOffset: number;
+  totalUpcomingDues: number;
+  tamaraUpcomingDues: number;
+  tabbyUpcomingDues: number;
+  activeInstallmentsCount: number;
+  completedInstallmentsCount: number;
+  totalRemainingDebt: number;
+  installments: SimulatedInstallmentItem[];
+}
+
+export type AllowanceHealthStatus = 'HEALTHY' | 'TIGHT' | 'DEFICIT';
+
+export interface DynamicAllowanceResult {
+  checkingBalance: number;
+  remainingFixedLiabilities: number;
+  availableAllowancePool: number;
+  daysRemainingInMonth: number;
+  dailyAllowance: number;
+  weeklyAllowance: number;
+  status: AllowanceHealthStatus;
+  burnRateExplanation: string;
 }
 
 export interface ExpenseRecord {

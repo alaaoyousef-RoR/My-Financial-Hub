@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import { formatCurrency, triggerCelebration } from '../utils/formatters';
-import { CarPlan, MonthlyRecord } from '../types/finance';
+import { CarPlan, MonthlyRecord, SettlementMethod } from '../types/finance';
+import { CarLoanWidget } from './dashboard/CarLoanWidget';
 import { Target, Sparkles, Car, CheckCircle2 } from 'lucide-react';
 
 interface WorkstationSidebarProps {
   currentMonthRecord: MonthlyRecord;
   carPlan: CarPlan;
-  onPayCarInstallment?: () => void;
+  checkingBalance?: number;
+  onPayCarInstallment?: (method?: SettlementMethod) => void;
   isReadOnlySimulation?: boolean;
 }
 
 export const WorkstationSidebar: React.FC<WorkstationSidebarProps> = ({
   currentMonthRecord,
   carPlan,
+  checkingBalance = 0,
   onPayCarInstallment,
   isReadOnlySimulation = false
 }) => {
@@ -35,67 +38,20 @@ export const WorkstationSidebar: React.FC<WorkstationSidebarProps> = ({
   const circumference = 2 * Math.PI * radius;
   let accumulatedOffset = 0;
 
-  const carProgressPct = carPlan.totalInstallments > 0 
-    ? Math.round((carPlan.paidInstallments / carPlan.totalInstallments) * 100) 
-    : 0;
-  const carRemaining = Math.max(carPlan.totalInstallments - carPlan.paidInstallments, 0);
-
   return (
     <aside className="sidebar space-y-4">
       
-      {/* 1. Car Financing Card matching Variation 5 */}
-      <div className="glass-panel stat-card p-5">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Car className="w-4 h-4 text-blue-400" />
-            <span className="label-mono font-bold text-blue-400">خطة تمويل السيارة</span>
-          </div>
-          <span className="label-mono text-[var(--ink-muted)]">
-            <span className="num-ltr font-mono font-bold">{carPlan.paidInstallments}/{carPlan.totalInstallments}</span>
-          </span>
-        </div>
-
-        <div className="flex justify-between items-center mt-3 text-xs">
-          <span className="text-[var(--ink)]">سداد <span className="num-ltr font-mono font-bold text-white">{carPlan.paidInstallments}</span> من <span className="num-ltr font-mono font-bold text-white">{carPlan.totalInstallments}</span> قسطاً</span>
-          <span className="num-ltr font-mono font-bold text-[var(--accent)]">{carProgressPct}%</span>
-        </div>
-
-        {/* Progress Container with Variation 5 gradient */}
-        <div className="w-full h-2 bg-[rgba(255,255,255,0.08)] rounded-full mt-2.5 overflow-hidden border border-[var(--glass-border)]">
-          <div 
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${Math.min(carProgressPct, 100)}%`,
-              background: 'linear-gradient(90deg, var(--accent), var(--indigo))'
-            }}
-          ></div>
-        </div>
-
-        <div className="mt-3.5 pt-3 border-t border-[var(--glass-border)] text-xs space-y-1.5">
-          <div className="flex justify-between text-[11px]">
-            <span className="text-[var(--ink-muted)]">الأقساط المتبقية:</span>
-            <span className="font-mono text-amber-400 font-bold"><span className="num-ltr">{carRemaining}</span> شهراً</span>
-          </div>
-          <div className="flex justify-between text-[11px]">
-            <span className="text-[var(--ink-muted)]">الدفعة الأخيرة:</span>
-            <span className="num-ltr font-mono font-bold text-amber-400">{formatCurrency(carPlan.balloonPayment)} ر.س</span>
-          </div>
-        </div>
-
-        {onPayCarInstallment && carRemaining > 0 && !isReadOnlySimulation && (
-          <button
-            onClick={() => {
-              onPayCarInstallment();
-              triggerCelebration();
-            }}
-            className="btn btn-primary w-full text-xs py-2 mt-3.5 flex items-center justify-center gap-1.5 shadow-sm"
-            title="تسجيل سداد قسط السيارة لهذا الشهر فوراً"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>+ سداد قسط ({formatCurrency(carPlan.monthlyInstallment)} ر.س)</span>
-          </button>
-        )}
-      </div>
+      {/* 1. Dedicated Car Financing & Settlement Widget */}
+      <CarLoanWidget
+        carPlan={carPlan}
+        checkingBalance={checkingBalance}
+        onPayCarInstallment={(method) => {
+          if (onPayCarInstallment) {
+            onPayCarInstallment(method);
+          }
+        }}
+        isReadOnlySimulation={isReadOnlySimulation}
+      />
 
       {/* 2. Commitments Analysis Donut with Variation 5 styling */}
       <div 
