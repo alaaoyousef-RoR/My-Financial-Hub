@@ -104,6 +104,26 @@ export type AccountType = 'checking' | 'savings' | 'external' | 'CHECKING' | 'SA
 // Settlement execution method for installments and loans
 export type SettlementMethod = 'CHECKING_ACCOUNT' | 'EXTERNAL' | 'PREPAID';
 
+// Explicit calendar-tied installment item status
+export type InstallmentItemStatus = 
+  | 'DUE' 
+  | 'PAID_ON_SCHEDULE' 
+  | 'PAID_IN_ADVANCE' 
+  | 'SKIPPED' 
+  | 'EXTERNAL';
+
+export interface InstallmentScheduleItem {
+  id: string;
+  monthYear: string; // Target calendar month e.g. "2026-11"
+  installmentNumber: number; // 1-based index (e.g. 1, 2, 3...)
+  amount: number;
+  status: InstallmentItemStatus;
+  dueDate?: string; // Optional exact due date e.g. "2026-11-15"
+  settledAt?: string;
+  paymentMethod?: SettlementMethod;
+  notes?: string;
+}
+
 // ==========================================
 // 2. Discrete Item Definitions
 // ==========================================
@@ -157,6 +177,9 @@ export interface InstallmentPlan {
   isPrepaid?: boolean;
   paidExternally?: boolean;
   settlementDate?: string;
+
+  // Explicit calendar-tied ledger schedule
+  schedule?: InstallmentScheduleItem[];
 }
 
 export type InstallmentRecord = InstallmentPlan;
@@ -202,6 +225,11 @@ export interface SimulatedInstallmentItem {
   isPrepaid?: boolean;
   paidExternally?: boolean;
   lastPaymentMethod?: SettlementMethod;
+
+  // Explicit calendar-tied ledger and target month status
+  targetMonthStatus?: InstallmentItemStatus;
+  targetScheduleItem?: InstallmentScheduleItem;
+  schedule: InstallmentScheduleItem[];
 }
 
 export interface BNPLMonthlySimulation {
@@ -226,6 +254,41 @@ export interface DynamicAllowanceResult {
   daysRemainingInMonth: number;
   dailyAllowance: number;
   weeklyAllowance: number;
+  status: AllowanceHealthStatus;
+  burnRateExplanation: string;
+}
+
+export interface WeeklyAllowanceBreakdown {
+  weekNumber: number; // 1, 2, 3, 4, 5
+  name: string; // e.g. "الأسبوع الأول"
+  startDate: string; // "YYYY-MM-DD"
+  endDate: string; // "YYYY-MM-DD"
+  startDay: number;
+  endDay: number;
+  daysCount: number;
+  allocatedAmount: number;
+  dailyRate: number;
+  isCurrentWeek: boolean;
+  isPastWeek: boolean;
+  isFutureWeek: boolean;
+}
+
+export interface MultiWeekAllowanceResult {
+  targetMonthYear: string;
+  totalCheckingBalance: number;
+  remainingFixedLiabilities: number;
+  unreservedCheckingPool: number;
+  allocatedAllowancePool: number;
+  reservedFunds: {
+    criticalObligations: number;
+    fuelAndEscrowReserve: number;
+  };
+  totalDaysInMonth: number;
+  daysRemainingInMonth: number;
+  numberOfWeeks: number;
+  weeklyAllowance: number;
+  dailyAllowance: number;
+  weeks: WeeklyAllowanceBreakdown[];
   status: AllowanceHealthStatus;
   burnRateExplanation: string;
 }

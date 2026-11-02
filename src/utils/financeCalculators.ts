@@ -10,6 +10,8 @@
 
 import {
   SettlementMethod,
+  InstallmentItemStatus,
+  InstallmentScheduleItem,
   InstallmentPlan,
   CarPlan,
   FixedObligation,
@@ -17,14 +19,17 @@ import {
   SimulatedInstallmentItem,
   DynamicAllowanceResult,
   AllowanceHealthStatus,
-  PlatformType
+  PlatformType,
+  WeeklyAllowanceBreakdown,
+  MultiWeekAllowanceResult
 } from '../types/types';
 import {
   getCurrentYearMonth,
   getMonthOffset,
   addMonthsToYearMonth,
   parseYearMonth,
-  getDaysInMonth
+  getDaysInMonth,
+  getRemainingDaysInMonth
 } from './dateFilters';
 
 export interface BalanceDeductionResult {
@@ -88,29 +93,214 @@ export function deductInstallmentFromBalance(
 }
 
 /**
- * 2. Calculate Dynamic Allowance
- * Derives the personal discretionary allowance from checking account balance
- * minus all pending critical obligations, apportioned across the remaining days of the month.
+ * 2. Generate Calendar-Tied Installment Schedule
+ * Creates a deterministic, explicit ledger of monthly installments for a contract.
+ * Ties each installment to a specific target calendar month (YYYY-MM).
+ */
+export function generateInstallmentSchedule(
+  plan: InstallmentPlan,
+  baseMonthYear: string = getCurrentYearMonth()
+): InstallmentScheduleItem[] {
+  if (Array.isArray(plan.schedule) && plan.schedule.length > 0) {
+    return [...plan.schedule].sort((a, b) => a.monthYear.localeCompare(b.monthYear));
+  }
+
+  const monthlyAmount = Math.max(Number(plan.amount) || 0, 0);
+  const totalTenure = plan.totalMonths || Math.max((plan.paidMonths || 0) + (plan.remainingMonths || 0), 4);
+  const startYM = plan.start || baseMonthYear;
+  const basePaidMonths = plan.paidMonths ?? Math.max(totalTenure - plan.remainingMonths, 0);
+
+  const items: InstallmentScheduleItem[] = [];
+
+  for (let i = 0; i < totalTenure; i++) {
+    const itemMonthYear = addMonthsToYearMonth(startYM, i);
+    const installmentNumber = i + 1;
+    let status: InstallmentItemStatus = 'DUE';
+    let paymentMethod: SettlementMethod | undefined = undefined;
+
+    if (itemMonthYear < baseMonthYear) {
+      // Historical past month
+      if (i < basePaidMonths) {
+        status = 'PAID_ON_SCHEDULE';
+      } else {
+        status = 'SKIPPED';
+      }
+    } else if (itemMonthYear === baseMonthYear) {
+      // Active current month
+      if (plan.isPaidThisMonth) {
+        if (plan.isPrepaid) {
+          status = 'PAID_IN_ADVANCE';
+          paymentMethod = 'PREPAID';
+        } else if (plan.paidExternally) {
+          status = 'EXTERNAL';
+          paymentMethod = 'EXTERNAL';
+        } else {
+          status = 'PAID_ON_SCHEDULE';
+          paymentMethod = plan.lastPaymentMethod || plan.paymentMethod || 'CHECKING_ACCOUNT';
+        }
+      } else {
+        status = 'DUE';
+      }
+    } else {
+      // Future month
+      if (plan.isPrepaid) {
+        status = 'PAID_IN_ADVANCE';
+        paymentMethod = 'PREPAID';
+      } else if (plan.status === 'completed' || plan.remainingMonths === 0) {
+        status = 'PAID_IN_ADVANCE';
+      } else {
+        status = 'DUE';
+      }
+    }
+
+    items.push({
+      id: `${plan.id}-sch-${itemMonthYear}`,
+      monthYear: itemMonthYear,
+      installmentNumber,
+      amount: monthlyAmount,
+      status,
+      paymentMethod,
+      dueDate: `${itemMonthYear}-${String(plan.dueDay || 15).padStart(2, '0')}`
+    });
+  }
+
+  return items;
+}
+
+/**
+ * 3. Decoupled Multi-Week Allowance Calculator
+ * Decouples the allowance budget from rigid total checking balance.
+ * Protects preserved checking funds (fuel, escrow, emergency cash).
+ * Evenly distributes the dedicated allowance budget across weeks 1 to 4/5 of the month.
+ */
+export function calculateMultiWeekAllowance(
+  allocatedAllowancePool: number | null,
+  checkingBalance: number,
+  remainingFixedLiabilities: number,
+  targetMonthYear: string = getCurrentYearMonth(),
+  referenceDate: Date = new Date()
+): MultiWeekAllowanceResult {
+  const currentYM = getCurrentYearMonth(referenceDate);
+  const totalDays = getDaysInMonth(targetMonthYear);
+  const remainingDays = getRemainingDaysInMonth(targetMonthYear, referenceDate);
+
+  const balance = Math.max(Number(checkingBalance) || 0, 0);
+  const liabilities = Math.max(Number(remainingFixedLiabilities) || 0, 0);
+  const unreservedCheckingPool = Math.max(Math.round((balance - liabilities) * 100) / 100, 0);
+
+  // User explicitly allocates a dedicated allowance pool, or it defaults to unreserved checking
+  let pool: number;
+  if (allocatedAllowancePool !== null && !isNaN(allocatedAllowancePool) && allocatedAllowancePool >= 0) {
+    pool = Math.round(allocatedAllowancePool * 100) / 100;
+  } else {
+    pool = unreservedCheckingPool;
+  }
+
+  // Funds preserved in checking for fuel, escrow, emergency buffer
+  const fuelAndEscrowReserve = Math.max(Math.round((balance - liabilities - pool) * 100) / 100, 0);
+
+  // Define calendar week partitions (standard 4 to 5 weeks)
+  const rawWeeks = [
+    { weekNumber: 1, name: 'الأسبوع الأول', startDay: 1, endDay: 7 },
+    { weekNumber: 2, name: 'الأسبوع الثاني', startDay: 8, endDay: 14 },
+    { weekNumber: 3, name: 'الأسبوع الثالث', startDay: 15, endDay: 21 },
+    { weekNumber: 4, name: 'الأسبوع الرابع', startDay: 22, endDay: 28 },
+    ...(totalDays > 28 ? [{ weekNumber: 5, name: 'الأسبوع الخامس (الختام)', startDay: 29, endDay: totalDays }] : [])
+  ];
+
+  const numberOfWeeks = rawWeeks.length;
+  const weeklyAllowance = Math.round((pool / (numberOfWeeks > 0 ? numberOfWeeks : 1)) * 100) / 100;
+  const dailyAllowance = Math.round((pool / (totalDays > 0 ? totalDays : 1)) * 100) / 100;
+
+  const currentDay = targetMonthYear === currentYM 
+    ? referenceDate.getDate() 
+    : (targetMonthYear < currentYM ? totalDays : 1);
+
+  const weeks: WeeklyAllowanceBreakdown[] = rawWeeks.map(w => {
+    const daysCount = w.endDay - w.startDay + 1;
+    const isCurrentWeek = targetMonthYear === currentYM && currentDay >= w.startDay && currentDay <= w.endDay;
+    const isPastWeek = targetMonthYear < currentYM || (targetMonthYear === currentYM && currentDay > w.endDay);
+    const isFutureWeek = targetMonthYear > currentYM || (targetMonthYear === currentYM && currentDay < w.startDay);
+
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    const startDate = `${targetMonthYear}-${pad2(w.startDay)}`;
+    const endDate = `${targetMonthYear}-${pad2(w.endDay)}`;
+
+    return {
+      weekNumber: w.weekNumber,
+      name: w.name,
+      startDate,
+      endDate,
+      startDay: w.startDay,
+      endDay: w.endDay,
+      daysCount,
+      allocatedAmount: weeklyAllowance,
+      dailyRate: Math.round((weeklyAllowance / daysCount) * 100) / 100,
+      isCurrentWeek,
+      isPastWeek,
+      isFutureWeek
+    };
+  });
+
+  // Health and burn rate explanation
+  let status: AllowanceHealthStatus = 'HEALTHY';
+  let burnRateExplanation = 'تم عزل مخصص المصروف الشخصي المعتمد عن أموال البنزين والأمانات وتوزيعه بالتساوي على أسابيع الشهر.';
+
+  if (balance < liabilities) {
+    status = 'DEFICIT';
+    const deficit = (liabilities - balance).toFixed(2);
+    burnRateExplanation = `تنبيه: عجز سيولة بقيمة (${deficit} ر.س) لتغطية الالتزامات الحرجة المحجوزة. يجب تعليق أي سحوبات للمصروف الشخصي.`;
+  } else if (pool > unreservedCheckingPool) {
+    status = 'TIGHT';
+    burnRateExplanation = `تنبيه: مخصص المصروف المعتمد (${pool.toFixed(2)} ر.س) يتجاوز الفائض المتاح بعد الالتزامات (${unreservedCheckingPool.toFixed(2)} ر.س). تم تفعيل وضع التنبيه.`;
+  } else if (dailyAllowance < 60 || pool < 500) {
+    status = 'TIGHT';
+    burnRateExplanation = 'هامش المصروف الأسبوعي مقيد. يرجى الالتزام بمعدل الصرف الأسبوعي لتفادي الضغط على السيولة.';
+  }
+
+  return {
+    targetMonthYear,
+    totalCheckingBalance: balance,
+    remainingFixedLiabilities: liabilities,
+    unreservedCheckingPool,
+    allocatedAllowancePool: pool,
+    reservedFunds: {
+      criticalObligations: liabilities,
+      fuelAndEscrowReserve
+    },
+    totalDaysInMonth: totalDays,
+    daysRemainingInMonth: remainingDays,
+    numberOfWeeks,
+    weeklyAllowance,
+    dailyAllowance,
+    weeks,
+    status,
+    burnRateExplanation
+  };
+}
+
+/**
+ * 4. Calculate Dynamic Allowance (Backward compatible wrapper)
  */
 export function calculateDynamicAllowance(
   checkingBalance: number,
   remainingFixedLiabilities: number,
-  daysRemainingInMonth: number
+  daysRemainingInMonth: number,
+  customAllocatedPool?: number | null
 ): DynamicAllowanceResult {
   const balance = Math.max(Number(checkingBalance) || 0, 0);
   const liabilities = Math.max(Number(remainingFixedLiabilities) || 0, 0);
 
-  // Available liquid pool for personal discretionary spending
-  const availableAllowancePool = Math.max(Math.round((balance - liabilities) * 100) / 100, 0);
+  const availableAllowancePool = customAllocatedPool !== undefined && customAllocatedPool !== null
+    ? Math.max(Number(customAllocatedPool) || 0, 0)
+    : Math.max(Math.round((balance - liabilities) * 100) / 100, 0);
 
-  // Safe days distribution
   const safeDays = Math.max(Math.floor(daysRemainingInMonth), 0);
   const daysDenominator = safeDays > 0 ? safeDays : 1;
 
   const dailyAllowance = Math.round((availableAllowancePool / daysDenominator) * 100) / 100;
   const weeklyAllowance = Math.round((dailyAllowance * 7) * 100) / 100;
 
-  // Derive health status
   let status: AllowanceHealthStatus = 'HEALTHY';
   let burnRateExplanation = 'الرصيد يغطي جميع الالتزامات مع هامش إنفاق يومي مريح.';
 
@@ -175,9 +365,10 @@ export function calculateRemainingFixedLiabilities(
 }
 
 /**
- * 3. Simulate BNPL Schedule (Tabby & Tamara)
- * Recalculates active contracts, upcoming monthly dues, and projected end dates
- * when switching between current and future/past months.
+ * 5. Simulate BNPL Schedule (Tabby & Tamara) with Explicit Ledger Support
+ * An installment contributes to upcoming dues for targetMonthYear IF AND ONLY IF
+ * its status in the explicit calendar ledger is 'DUE'.
+ * Unpaid items, prepaid, external, or skipped items are reflected deterministically.
  */
 export function simulateBNPLSchedule(
   installmentsList: InstallmentPlan[] = [],
@@ -193,46 +384,37 @@ export function simulateBNPLSchedule(
 
   const schedule: SimulatedInstallmentItem[] = installmentsList.map((plan) => {
     const monthlyAmount = Math.max(Number(plan.amount) || 0, 0);
-    const totalTenure = plan.totalMonths || Math.max((plan.paidMonths || 0) + (plan.remainingMonths || 0), 4);
-    const basePaidMonths = plan.paidMonths ?? Math.max(totalTenure - plan.remainingMonths, 0);
+    const planSchedule = generateInstallmentSchedule(plan, baseMonthYear);
+    const totalTenure = planSchedule.length || plan.totalMonths || Math.max((plan.paidMonths || 0) + (plan.remainingMonths || 0), 4);
     const totalAmount = plan.totalAmount || (monthlyAmount * totalTenure);
 
-    // Projected paid installments at the target month
-    let paidMonthsAtTarget: number;
-    if (monthOffset >= 0) {
-      paidMonthsAtTarget = Math.min(basePaidMonths + monthOffset, totalTenure);
-    } else {
-      paidMonthsAtTarget = Math.max(basePaidMonths + monthOffset, 0);
-    }
+    // Find schedule item matching targetMonthYear
+    const targetScheduleItem = planSchedule.find(item => item.monthYear === targetMonthYear);
 
-    const remainingMonthsAtTarget = Math.max(totalTenure - paidMonthsAtTarget, 0);
-    const isSettled = remainingMonthsAtTarget === 0 || plan.status === 'completed';
+    // Explicit check: An installment contributes to upcoming dues for targetMonthYear IF AND ONLY IF status === 'DUE'
+    const targetMonthStatus: InstallmentItemStatus = targetScheduleItem 
+      ? targetScheduleItem.status 
+      : (targetMonthYear < (plan.start || baseMonthYear) ? 'SKIPPED' : 'PAID_ON_SCHEDULE');
 
-    // Contract active in target month if there is an installment due in that specific month
-    let isActiveInTargetMonth = false;
-    let projectedDueInTargetMonth = 0;
+    const isActiveInTargetMonth = targetScheduleItem?.status === 'DUE';
+    const projectedDueInTargetMonth = isActiveInTargetMonth ? (targetScheduleItem?.amount ?? monthlyAmount) : 0;
 
-    if (monthOffset === 0) {
-      // Live current month
-      isActiveInTargetMonth = plan.status === 'active' && !plan.isPaidThisMonth && plan.remainingMonths > 0;
-      projectedDueInTargetMonth = isActiveInTargetMonth ? monthlyAmount : 0;
-    } else if (monthOffset > 0) {
-      // Future projection month
-      const willBeActive = (basePaidMonths + monthOffset) <= totalTenure && (basePaidMonths + monthOffset) > 0;
-      isActiveInTargetMonth = willBeActive && !plan.isPrepaid;
-      projectedDueInTargetMonth = isActiveInTargetMonth ? monthlyAmount : 0;
-    } else {
-      // Historical past month
-      isActiveInTargetMonth = paidMonthsAtTarget > 0 && paidMonthsAtTarget <= totalTenure;
-      projectedDueInTargetMonth = isActiveInTargetMonth ? monthlyAmount : 0;
-    }
+    // Remaining debt at target: Sum of all DUE installments in schedule from targetMonthYear onwards
+    const remainingDueItems = planSchedule.filter(item => item.status === 'DUE' && item.monthYear >= targetMonthYear);
+    const remainingDebtAtTarget = Math.round(
+      remainingDueItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) * 100
+    ) / 100;
 
-    // Cumulative remaining balance to settle after target month
-    const remainingDebtAtTarget = Math.round((remainingMonthsAtTarget * monthlyAmount) * 100) / 100;
+    // Count paid up to target month
+    const paidMonthsAtTarget = planSchedule.filter(
+      item => item.monthYear <= targetMonthYear && (item.status === 'PAID_ON_SCHEDULE' || item.status === 'PAID_IN_ADVANCE' || item.status === 'EXTERNAL')
+    ).length;
 
-    // Projected end month
-    const startYM = plan.start || baseMonthYear;
-    const computedEndYM = plan.end || addMonthsToYearMonth(startYM, totalTenure);
+    const remainingMonthsAtTarget = remainingDueItems.length;
+    const isSettled = remainingMonthsAtTarget === 0;
+
+    const startYM = plan.start || (planSchedule[0] ? planSchedule[0].monthYear : baseMonthYear);
+    const computedEndYM = plan.end || (planSchedule.length > 0 ? planSchedule[planSchedule.length - 1].monthYear : addMonthsToYearMonth(startYM, totalTenure));
 
     if (isActiveInTargetMonth) {
       totalUpcomingDues += projectedDueInTargetMonth;
@@ -262,9 +444,12 @@ export function simulateBNPLSchedule(
       startDate: startYM,
       endDate: computedEndYM,
       isSettled,
-      isPrepaid: plan.isPrepaid,
-      paidExternally: plan.paidExternally,
-      lastPaymentMethod: plan.lastPaymentMethod
+      isPrepaid: plan.isPrepaid || targetMonthStatus === 'PAID_IN_ADVANCE',
+      paidExternally: plan.paidExternally || targetMonthStatus === 'EXTERNAL',
+      lastPaymentMethod: targetScheduleItem?.paymentMethod || plan.lastPaymentMethod,
+      targetMonthStatus,
+      targetScheduleItem,
+      schedule: planSchedule
     };
   });
 

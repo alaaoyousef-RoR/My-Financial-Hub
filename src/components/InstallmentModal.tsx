@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InstallmentRecord, PlatformType } from '../types/finance';
 import { X, Calculator, Edit3, Plus } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
+import { generateInstallmentSchedule } from '../utils/financeCalculators';
 
 interface InstallmentModalProps {
   isOpen: boolean;
@@ -100,6 +101,9 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
         status,
         category
       };
+      updated.schedule = editingInstallment.schedule && editingInstallment.schedule.length === validTotalMonths
+        ? editingInstallment.schedule
+        : generateInstallmentSchedule(updated);
       onUpdate(updated);
     } else {
       const newItem: Omit<InstallmentRecord, 'id'> = {
@@ -115,6 +119,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
         status,
         category
       };
+      newItem.schedule = generateInstallmentSchedule(newItem as InstallmentRecord);
       onSave(newItem);
     }
     onClose();

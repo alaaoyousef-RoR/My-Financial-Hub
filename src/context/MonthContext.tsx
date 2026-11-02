@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useMemo, ReactNode } from 'react';
-import { MonthItem, MonthContextState, BNPLMonthlySimulation } from '../types/finance';
+import { MonthItem, MonthContextState, BNPLMonthlySimulation, MultiWeekAllowanceResult } from '../types/finance';
 import { useFinancialState } from './FinancialContext';
 import { calculateProjectedMonth } from '../utils/financialMath';
-import { simulateBNPLSchedule } from '../utils/financeCalculators';
+import { simulateBNPLSchedule, calculateMultiWeekAllowance } from '../utils/financeCalculators';
 import { 
   getCurrentYearMonth, 
   generateTimelineMonths, 
@@ -23,6 +23,7 @@ interface ExtendedMonthContextType extends MonthContextState {
   isZeroDebtMonth: boolean;
   activeInstallmentsCount: number;
   bnplSimulation: BNPLMonthlySimulation;
+  multiWeekAllowance: MultiWeekAllowanceResult;
 }
 
 const MonthContext = createContext<ExtendedMonthContextType | undefined>(undefined);
@@ -118,6 +119,16 @@ export const MonthProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return simulateBNPLSchedule(financial.installments, selectedYearMonth, currentSystemYM);
   }, [financial.installments, selectedYearMonth, currentSystemYM]);
 
+  // Decoupled multi-week allowance for selected month
+  const multiWeekAllowance = useMemo(() => {
+    return calculateMultiWeekAllowance(
+      financial.allocatedAllowancePool,
+      projection.projectedCheckingBalance,
+      projection.projectedFixed + bnplSimulation.totalUpcomingDues,
+      selectedYearMonth
+    );
+  }, [financial.allocatedAllowancePool, projection.projectedCheckingBalance, projection.projectedFixed, bnplSimulation.totalUpcomingDues, selectedYearMonth]);
+
   return (
     <MonthContext.Provider
       value={{
@@ -144,7 +155,8 @@ export const MonthProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         activeMonthSavingsBalance: projection.projectedSavingsBalance,
         isZeroDebtMonth: projection.isZeroDebtMonth,
         activeInstallmentsCount: projection.activeInstallmentsCount,
-        bnplSimulation
+        bnplSimulation,
+        multiWeekAllowance
       }}
     >
       {children}

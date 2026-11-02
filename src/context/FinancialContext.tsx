@@ -24,7 +24,11 @@ import {
   LiabilityCategory,
   FixedObligationCategory,
   SettlementMethod,
-  DynamicAllowanceResult
+  DynamicAllowanceResult,
+  InstallmentItemStatus,
+  InstallmentScheduleItem,
+  WeeklyAllowanceBreakdown,
+  MultiWeekAllowanceResult
 } from '../types/finance';
 import { 
   INITIAL_INCOMES, 
@@ -72,7 +76,9 @@ import {
   deductInstallmentFromBalance,
   calculateDynamicAllowance,
   calculateRemainingFixedLiabilities,
-  simulateBNPLSchedule
+  simulateBNPLSchedule,
+  generateInstallmentSchedule,
+  calculateMultiWeekAllowance
 } from '../utils/financeCalculators';
 import {
   getCurrentYearMonth,
@@ -100,6 +106,10 @@ interface FinancialContextType {
   transactions: FinancialTransaction[];
   toastMessage: string | null;
 
+  // Decoupled Allowance Dedicated Pool
+  allocatedAllowancePool: number | null;
+  setAllocatedAllowancePool: (pool: number | null) => void;
+
   // Derived Financial Metrics
   totalIncome: number;
   totalFixed: number;
@@ -112,6 +122,7 @@ interface FinancialContextType {
   totalNetLiquidity: number;
   realAvailableLiquidity: number;
   dynamicAllowance: DynamicAllowanceResult;
+  multiWeekAllowance: MultiWeekAllowanceResult;
 
   // Direct State Setters
   setIncomes: React.Dispatch<React.SetStateAction<IncomeItem[]>>;
@@ -134,6 +145,7 @@ interface FinancialContextType {
   deleteInstallment: (id: string) => void;
   saveInstallment: (name: string, platform: PlatformType, amount: number, start: string, end: string, remainingMonths: number, category?: string) => void;
   updateInstallment: (updatedItem: InstallmentRecord) => void;
+  updateScheduleItemStatus: (planId: string, monthYear: string, status: InstallmentItemStatus, method?: SettlementMethod) => void;
 
   transferToSavings: (title: string, amount: number, category: SavingsCategory, notes?: string) => boolean;
   deleteSavings: (id: string) => void;
@@ -204,6 +216,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [monthlyData, setMonthlyData] = useState<MonthlyRecord[]>(() => getStoredState('hub_monthly', INITIAL_MONTHLY_DATA));
   const [accountBalances, setAccountBalances] = useState<AccountBalancesState>(() => getStoredState('liquid_account_balances', INITIAL_ACCOUNT_BALANCES));
   const [transactions, setTransactions] = useState<FinancialTransaction[]>(() => getStoredState('hub_transactions_log', []));
+  const [allocatedAllowancePool, setAllocatedAllowancePool] = useState<number | null>(() => getStoredState<number | null>('hub_allocated_allowance_pool', null));
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const isRemoteSyncRef = useRef(false);
@@ -230,11 +243,12 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       localStorage.setItem('hub_monthly', JSON.stringify(monthlyData));
       localStorage.setItem('liquid_account_balances', JSON.stringify(accountBalances));
       localStorage.setItem('hub_transactions_log', JSON.stringify(transactions));
+      localStorage.setItem('hub_allocated_allowance_pool', JSON.stringify(allocatedAllowancePool));
       console.log('[Persistence] All financial states committed to localStorage ✓');
     } catch (e) {
       console.error('[Persistence] Error writing state to localStorage:', e);
     }
-  }, [incomes, carPlan, fixedObligations, installments, expenses, savings, liabilities, receivables, monthlyData, accountBalances, transactions]);
+  }, [incomes, carPlan, fixedObligations, installments, expenses, savings, liabilities, receivables, monthlyData, accountBalances, transactions, allocatedAllowancePool]);
 
   // Real-time synchronization with Firestore
   useEffect(() => {
@@ -271,6 +285,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
             if (Array.isArray(data.monthlyData)) setMonthlyData(data.monthlyData);
             if (data.accountBalances) setAccountBalances(data.accountBalances);
             if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+            if (data.allocatedAllowancePool !== undefined) setAllocatedAllowancePool(data.allocatedAllowancePool);
             setSaveStatus('saved');
             console.log('[Persistence] Synced remote document from Cloud Firestore ✓');
           } else {
@@ -293,6 +308,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
               monthlyData,
               accountBalances,
               transactions,
+              allocatedAllowancePool,
               updatedAt: new Date().toISOString()
             };
             await setDoc(docRef, sanitizeForFirestore(currentLocalDoc));
@@ -342,6 +358,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         monthlyData,
         accountBalances,
         transactions,
+        allocatedAllowancePool,
         updatedAt: new Date().toISOString(),
         ...customOverrides
       };
@@ -369,7 +386,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     return () => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
-  }, [incomes, carPlan, fixedObligations, installments, expenses, savings, liabilities, receivables, monthlyData, accountBalances, transactions, user, dataLoading]);
+  }, [incomes, carPlan, fixedObligations, installments, expenses, savings, liabilities, receivables, monthlyData, accountBalances, transactions, allocatedAllowancePool, user, dataLoading]);
 
   // Derived Financial Equations
   const totalIncome = useMemo(() => {
@@ -448,8 +465,24 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   const dynamicAllowance = useMemo(() => {
     const currentYM = getCurrentYearMonth();
     const remainingDays = getRemainingDaysInMonth(currentYM);
-    return calculateDynamicAllowance(accountBalances.checkingBalance, unpaidCommitments, remainingDays);
-  }, [accountBalances.checkingBalance, unpaidCommitments]);
+    return calculateDynamicAllowance(
+      accountBalances.checkingBalance,
+      unpaidCommitments,
+      remainingDays,
+      allocatedAllowancePool
+    );
+  }, [accountBalances.checkingBalance, unpaidCommitments, allocatedAllowancePool]);
+
+  // Decoupled Multi-Week Allowance Distribution for current month
+  const multiWeekAllowance = useMemo(() => {
+    const currentYM = getCurrentYearMonth();
+    return calculateMultiWeekAllowance(
+      allocatedAllowancePool,
+      accountBalances.checkingBalance,
+      unpaidCommitments,
+      currentYM
+    );
+  }, [allocatedAllowancePool, accountBalances.checkingBalance, unpaidCommitments]);
 
   // Actions
   const payInstallment = (id: string, paymentMethod: SettlementMethod = 'CHECKING_ACCOUNT'): boolean => {
@@ -475,11 +508,30 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       }));
     }
 
-    const total = target.totalMonths || Math.max(target.remainingMonths + (target.paidMonths || 0), 4);
-    const currentPaid = target.paidMonths ?? Math.max(total - target.remainingMonths, 0);
-    const newRemaining = Math.max(target.remainingMonths - 1, 0);
-    const newPaid = currentPaid + 1;
-    const isCompleted = newRemaining === 0;
+    const currentYM = getCurrentYearMonth();
+    const currentSchedule = generateInstallmentSchedule(target, currentYM);
+    const scheduleStatus: InstallmentItemStatus = paymentMethod === 'PREPAID'
+      ? 'PAID_IN_ADVANCE'
+      : paymentMethod === 'EXTERNAL'
+        ? 'EXTERNAL'
+        : 'PAID_ON_SCHEDULE';
+
+    const updatedSchedule = currentSchedule.map(item => {
+      if (item.monthYear === currentYM) {
+        return {
+          ...item,
+          status: scheduleStatus,
+          paymentMethod,
+          settledAt: new Date().toISOString()
+        };
+      }
+      return item;
+    });
+
+    const total = target.totalMonths || updatedSchedule.length || Math.max(target.remainingMonths + (target.paidMonths || 0), 4);
+    const remainingCount = updatedSchedule.filter(item => item.status === 'DUE').length;
+    const paidCount = updatedSchedule.filter(item => item.status !== 'DUE' && item.status !== 'SKIPPED').length;
+    const isCompleted = remainingCount === 0;
 
     const methodLabel = paymentMethod === 'CHECKING_ACCOUNT'
       ? 'الحساب الجاري'
@@ -491,12 +543,13 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (item.id === id) {
         return {
           ...item,
+          schedule: updatedSchedule,
           totalMonths: total,
-          paidMonths: newPaid,
-          remainingMonths: newRemaining,
+          paidMonths: paidCount,
+          remainingMonths: remainingCount,
           isPaidThisMonth: true,
           status: isCompleted ? 'completed' : 'active',
-          remainingNote: isCompleted ? 'مكتمل بالكامل 🎉' : `${newRemaining} أشهر متبقية`,
+          remainingNote: isCompleted ? 'مكتمل بالكامل 🎉' : `${remainingCount} أشهر متبقية`,
           paymentMethod,
           lastPaymentMethod: paymentMethod,
           isPrepaid: paymentMethod === 'PREPAID',
@@ -516,7 +569,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       sourceAccount: deduction.isDeductedFromChecking ? 'checking' : 'external',
       destinationAccount: 'external',
       relatedId: target.id,
-      notes: `${deduction.transactionNote} | ${isCompleted ? 'اكتملت خطة الأقساط بالكامل' : `متبقي ${newRemaining} أشهر`}`
+      notes: `${deduction.transactionNote} | ${isCompleted ? 'اكتملت خطة الأقساط بالكامل' : `متبقي ${remainingCount} أشهر`}`
     };
     setTransactions(prev => [newTx, ...prev]);
 
@@ -547,20 +600,35 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
       }));
     }
 
-    const total = target.totalMonths || 4;
-    const currentPaid = Math.max((target.paidMonths ?? (total - target.remainingMonths)) - 1, 0);
-    const newRemaining = target.remainingMonths + 1;
+    const currentYM = getCurrentYearMonth();
+    const currentSchedule = generateInstallmentSchedule(target, currentYM);
+    const updatedSchedule = currentSchedule.map(item => {
+      if (item.monthYear === currentYM) {
+        return {
+          ...item,
+          status: 'DUE' as InstallmentItemStatus,
+          paymentMethod: undefined,
+          settledAt: undefined
+        };
+      }
+      return item;
+    });
+
+    const total = target.totalMonths || updatedSchedule.length || 4;
+    const remainingCount = updatedSchedule.filter(item => item.status === 'DUE').length;
+    const paidCount = updatedSchedule.filter(item => item.status !== 'DUE' && item.status !== 'SKIPPED').length;
 
     setInstallments(prev => prev.map(item => {
       if (item.id === id) {
         return {
           ...item,
+          schedule: updatedSchedule,
           totalMonths: total,
-          paidMonths: currentPaid,
-          remainingMonths: newRemaining,
+          paidMonths: paidCount,
+          remainingMonths: remainingCount,
           isPaidThisMonth: false,
           status: 'active',
-          remainingNote: `${newRemaining} أشهر متبقية`,
+          remainingNote: `${remainingCount} أشهر متبقية`,
           lastPaymentMethod: undefined,
           isPrepaid: false,
           paidExternally: false,
@@ -574,6 +642,61 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     showToast(wasDeductedFromChecking
       ? `تم التراجع عن سداد القسط واستعادة ${formatCurrency(target.amount)} ر.س للحساب الجاري`
       : `تم التراجع عن سداد القسط (لم يتم تعديل الرصيد الجاري لأنه لم يُخصم منه)`);
+  };
+
+  const updateScheduleItemStatus = (
+    planId: string,
+    monthYear: string,
+    newStatus: InstallmentItemStatus,
+    method?: SettlementMethod
+  ) => {
+    const targetPlan = installments.find(i => i.id === planId);
+    if (!targetPlan) return;
+
+    const currentSchedule = generateInstallmentSchedule(targetPlan);
+    const updatedSchedule = currentSchedule.map(item => {
+      if (item.monthYear === monthYear) {
+        return {
+          ...item,
+          status: newStatus,
+          paymentMethod: method || (newStatus === 'PAID_ON_SCHEDULE' ? 'CHECKING_ACCOUNT' : newStatus === 'EXTERNAL' ? 'EXTERNAL' : newStatus === 'PAID_IN_ADVANCE' ? 'PREPAID' : undefined),
+          settledAt: newStatus === 'DUE' ? undefined : new Date().toISOString()
+        };
+      }
+      return item;
+    });
+
+    // Check if current month was affected
+    const currentYM = getCurrentYearMonth();
+    const currentMonthItem = updatedSchedule.find(item => item.monthYear === currentYM);
+    const isPaidCurrent = currentMonthItem ? (currentMonthItem.status !== 'DUE' && currentMonthItem.status !== 'SKIPPED') : targetPlan.isPaidThisMonth;
+
+    const remainingCount = updatedSchedule.filter(item => item.status === 'DUE').length;
+    const paidCount = updatedSchedule.filter(item => item.status !== 'DUE' && item.status !== 'SKIPPED').length;
+
+    setInstallments(prev => prev.map(p => {
+      if (p.id === planId) {
+        return {
+          ...p,
+          schedule: updatedSchedule,
+          isPaidThisMonth: isPaidCurrent,
+          remainingMonths: remainingCount,
+          paidMonths: paidCount,
+          status: remainingCount === 0 ? 'completed' : 'active',
+          remainingNote: remainingCount === 0 ? 'مكتمل بالكامل 🎉' : `${remainingCount} أشهر متبقية`
+        };
+      }
+      return p;
+    }));
+
+    const statusLabels: Record<InstallmentItemStatus, string> = {
+      DUE: 'مستحق الدفع',
+      PAID_ON_SCHEDULE: 'تم السداد',
+      PAID_IN_ADVANCE: 'مدفوع مقدماً',
+      SKIPPED: 'مؤجل / متجاوز',
+      EXTERNAL: 'سداد خارجي'
+    };
+    showToast(`تم تحديث حالة قسط شهر (${monthYear}) لعقد ${targetPlan.name} إلى: "${statusLabels[newStatus]}"`);
   };
 
   const toggleInstallmentStatus = (id: string) => {
@@ -1105,6 +1228,9 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         totalNetLiquidity,
         realAvailableLiquidity,
         dynamicAllowance,
+        multiWeekAllowance,
+        allocatedAllowancePool,
+        setAllocatedAllowancePool,
 
         setIncomes,
         setFixedObligations,
@@ -1125,6 +1251,7 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
         deleteInstallment,
         saveInstallment,
         updateInstallment,
+        updateScheduleItemStatus,
 
         transferToSavings,
         deleteSavings,

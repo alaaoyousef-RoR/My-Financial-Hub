@@ -46,6 +46,7 @@ import { InstallmentModal } from './components/InstallmentModal';
 import { StatementImportModal } from './components/modals/StatementImportModal';
 import { SetStartingBalanceModal } from './components/onboarding/SetStartingBalanceModal';
 import { EmptyDashboardState } from './components/dashboard/EmptyDashboardState';
+import { AllowancePlanner } from './components/dashboard/AllowancePlanner';
 import { InstallmentRecord, SettlementMethod } from './types/finance';
 
 function DashboardAppContent() {
@@ -269,6 +270,11 @@ function DashboardAppContent() {
                   totalBNPL={monthContext.activeMonthBNPL}
                   totalPersonalExpenses={totalPersonalExpenses}
                   totalSavings={totalSavings}
+                />
+
+                {/* Decoupled Multi-Week Allowance Planner */}
+                <AllowancePlanner
+                  isReadOnlySimulation={monthContext.isReadOnlySimulation}
                 />
 
                 {/* Collapsible Chart Section */}

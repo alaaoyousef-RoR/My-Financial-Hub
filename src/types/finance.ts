@@ -41,10 +41,14 @@ export type {
   MonthItem,
   MonthContextState,
   SettlementMethod,
+  InstallmentItemStatus,
+  InstallmentScheduleItem,
   SimulatedInstallmentItem,
   BNPLMonthlySimulation,
   AllowanceHealthStatus,
-  DynamicAllowanceResult
+  DynamicAllowanceResult,
+  WeeklyAllowanceBreakdown,
+  MultiWeekAllowanceResult
 } from './types';
 
 export type { MonthlyRecord as CanonicalMonthlyRecord } from './types';
